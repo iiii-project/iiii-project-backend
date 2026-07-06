@@ -23,6 +23,7 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
     session_id = serializers.CharField(source="session_uuid", read_only=True)
     fortune_set = FortuneSetSerializer(read_only=True)
     fortune = FortuneSerializer(read_only=True)
+    interpretation = serializers.SerializerMethodField()
 
     class Meta:
         model = DivinationSession
@@ -36,11 +37,22 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
             "interaction_mode",
             "status",
             "confirmed",
+            "interpretation",
             "ai_interpretation",
             "created_at",
             "updated_at",
             "completed_at",
         ]
+
+    def get_interpretation(self, obj):
+        if not obj.ai_interpretation:
+            return None
+        return {
+            "overall_meaning": obj.ai_interpretation,
+            "relation_to_question": "",
+            "suggested_actions": [],
+            "warnings": ["本系統僅供文化體驗及參考。"],
+        }
 
 
 class BlockCastSerializer(serializers.ModelSerializer):
