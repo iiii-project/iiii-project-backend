@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from apps.ai_service.models import AIMessage
@@ -16,11 +18,32 @@ class FakeResponse:
         return None
 
     def json(self):
-        return {"choices": [{"message": {"content": "ok"}}]}
+        return {"choices": [{"message": {"content": "ok"}}], "usage": {"total_tokens": 3}}
+
+
+class FakeSpan:
+    def __init__(self):
+        self.input = None
+        self.output = None
+        self.model = None
+        self.provider = None
+        self.usage = None
+
+
+class FakeSpanContext:
+    def __init__(self, span):
+        self.span = span
+
+    def __enter__(self):
+        return self.span
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
 
 
 def test_chat_allows_empty_api_key_for_local_models(settings, monkeypatch):
     calls = []
+    settings.OPIK_ENABLED = False
     settings.LLM_API_KEY = ""
     settings.LLM_BASE_URL = "http://localhost:1234/v1"
     settings.LLM_MODEL = "local-model"
@@ -37,6 +60,7 @@ def test_chat_allows_empty_api_key_for_local_models(settings, monkeypatch):
 
 def test_chat_sends_auth_header_when_api_key_exists(settings, monkeypatch):
     calls = []
+    settings.OPIK_ENABLED = False
     settings.LLM_API_KEY = "secret"
 
     def fake_post(*args, **kwargs):
@@ -48,6 +72,30 @@ def test_chat_sends_auth_header_when_api_key_exists(settings, monkeypatch):
     _chat([{"role": "user", "content": "hi"}])
 
     assert calls[0]["headers"] == {"Authorization": "Bearer secret"}
+
+
+def test_chat_logs_opik_span_when_enabled(settings, monkeypatch):
+    settings.OPIK_ENABLED = True
+    settings.OPIK_PROJECT_NAME = "ai-fortune"
+    settings.LLM_MODEL = "local-model"
+    span = FakeSpan()
+    calls = []
+
+    def fake_span(*args, **kwargs):
+        calls.append((args, kwargs))
+        return FakeSpanContext(span)
+
+    monkeypatch.setattr("apps.ai_service.services.opik", SimpleNamespace(start_as_current_span=fake_span))
+    monkeypatch.setattr("apps.ai_service.services.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    assert _chat([{"role": "user", "content": "hi"}]) == "ok"
+
+    assert calls == [(("fortune-llm-chat",), {"type": "llm", "project_name": "ai-fortune"})]
+    assert span.input == {"messages": [{"role": "user", "content": "hi"}]}
+    assert span.output == {"content": "ok"}
+    assert span.model == "local-model"
+    assert span.provider == "openai-compatible"
+    assert span.usage == {"total_tokens": 3}
 
 
 @pytest.mark.django_db

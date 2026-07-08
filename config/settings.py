@@ -101,3 +101,5 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "local-model")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
+OPIK_ENABLED = os.getenv("OPIK_ENABLED", "True") == "True"
+OPIK_PROJECT_NAME = os.getenv("OPIK_PROJECT_NAME", "ai-fortune")

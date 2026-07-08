@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 import httpx
 from django.conf import settings
 from django.db import transaction
@@ -7,6 +9,11 @@ from apps.divinations.models import DivinationSession
 from apps.divinations.services import DomainError
 
 from .models import AIMessage
+
+try:
+    import opik
+except ImportError:  # pragma: no cover - optional observability dependency
+    opik = None
 
 
 def _message_data(message: AIMessage) -> dict:
@@ -62,16 +69,53 @@ def _chat(messages: list[dict[str, str]]) -> str:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
 
     try:
-        response = httpx.post(
-            f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
-            headers=headers,
-            json={"model": settings.LLM_MODEL, "messages": messages},
-            timeout=settings.LLM_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        with _llm_span(messages) as span:
+            response = httpx.post(
+                f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
+                headers=headers,
+                json={"model": settings.LLM_MODEL, "messages": messages},
+                timeout=settings.LLM_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            if span:
+                span.output = {"content": content}
+                span.usage = data.get("usage")
+            return content
     except (httpx.HTTPError, KeyError, IndexError) as exc:
         raise DomainError("AI_SERVICE_UNAVAILABLE", "AI 暫時無法使用，請稍後再試", 503) from exc
+
+
+@contextmanager
+def _llm_span(messages: list[dict[str, str]]):
+    if opik is None or not settings.OPIK_ENABLED:
+        yield None
+        return
+
+    try:
+        span_context = opik.start_as_current_span(
+            "fortune-llm-chat",
+            type="llm",
+            project_name=settings.OPIK_PROJECT_NAME,
+        )
+        span = span_context.__enter__()
+    except Exception:
+        yield None
+        return
+
+    span.input = {"messages": messages}
+    span.model = settings.LLM_MODEL
+    span.provider = "openai-compatible"
+
+    try:
+        yield span
+    except BaseException as exc:
+        if span_context.__exit__(type(exc), exc, exc.__traceback__):
+            return
+        raise
+    else:
+        span_context.__exit__(None, None, None)
 
 
 def interpret_session(session_uuid: str) -> DivinationSession:
