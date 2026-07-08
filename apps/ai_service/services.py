@@ -79,11 +79,13 @@ def _chat(messages: list[dict[str, str]]) -> str:
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"]
+            if not content.strip():
+                raise ValueError
             if span:
                 span.output = {"content": content}
                 span.usage = data.get("usage")
             return content
-    except (httpx.HTTPError, KeyError, IndexError) as exc:
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
         raise DomainError("AI_SERVICE_UNAVAILABLE", "AI 暫時無法使用，請稍後再試", 503) from exc
 
 
@@ -122,7 +124,7 @@ def interpret_session(session_uuid: str) -> DivinationSession:
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status == "completed" and session.ai_interpretation:
         return session
-    if not session.confirmed or session.status != "confirmed" or not session.fortune_id:
+    if not session.confirmed or session.status not in {"confirmed", "completed"} or not session.fortune_id:
         raise DomainError("INVALID_SESSION_STATE", "尚未取得聖筊，不能解籤", 409)
 
     system_prompt = _system_prompt(session)

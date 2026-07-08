@@ -14,11 +14,14 @@ from apps.fortunes.models import Fortune, FortuneSet
 
 
 class FakeResponse:
+    def __init__(self, content="ok"):
+        self.content = content
+
     def raise_for_status(self):
         return None
 
     def json(self):
-        return {"choices": [{"message": {"content": "ok"}}], "usage": {"total_tokens": 3}}
+        return {"choices": [{"message": {"content": self.content}}], "usage": {"total_tokens": 3}}
 
 
 class FakeSpan:
@@ -98,6 +101,16 @@ def test_chat_logs_opik_span_when_enabled(settings, monkeypatch):
     assert span.usage == {"total_tokens": 3}
 
 
+def test_chat_rejects_empty_model_reply(settings, monkeypatch):
+    settings.OPIK_ENABLED = False
+    monkeypatch.setattr("apps.ai_service.services.httpx.post", lambda *args, **kwargs: FakeResponse(""))
+
+    with pytest.raises(Exception) as exc_info:
+        _chat([{"role": "user", "content": "hi"}])
+
+    assert exc_info.value.default_code == "AI_SERVICE_UNAVAILABLE"
+
+
 @pytest.mark.django_db
 def test_interpret_is_idempotent_after_completed(monkeypatch):
     fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
@@ -117,6 +130,28 @@ def test_interpret_is_idempotent_after_completed(monkeypatch):
     result = interpret_session(session.session_uuid)
 
     assert result.ai_interpretation == "已解籤"
+
+
+@pytest.mark.django_db
+def test_interpret_retries_completed_session_without_interpretation(monkeypatch):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=4, poem="詩")
+    session = DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question="測試",
+        category="career",
+        interaction_mode="click",
+        status="completed",
+        confirmed=True,
+        ai_interpretation="",
+    )
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "補回解籤")
+
+    result = interpret_session(session.session_uuid)
+
+    assert result.status == "completed"
+    assert result.ai_interpretation == "補回解籤"
 
 
 @pytest.mark.django_db
