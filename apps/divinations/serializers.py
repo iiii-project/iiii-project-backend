@@ -12,6 +12,7 @@ class DivinationCreateSerializer(serializers.Serializer):
     category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES)
     interaction_mode = serializers.ChoiceField(choices=DivinationSession.INTERACTION_CHOICES)
     anonymous_user_id = serializers.CharField(max_length=100, allow_blank=True, required=False, default="")
+    fortune_number = serializers.IntegerField(min_value=1, required=False)
 
     def validate_fortune_set_code(self, value):
         if not FortuneSet.objects.filter(code=value, is_active=True).exists():

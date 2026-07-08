@@ -13,6 +13,7 @@
 後端負責：
 
 - 籤系與籤詩資料
+- 籤號查詢與輸入
 - 求籤工作階段
 - 抽籤結果
 - 擲筊結果
@@ -24,6 +25,13 @@
 - 系統設定與日誌
 
 第一階段使用六十甲子籤，但資料模型必須支援未來新增其他籤系。
+
+必要功能對照：
+
+- 籤詩資料庫建置：由 `FortuneSet` / `Fortune` 結構化保存籤詩、詩意、典故、分類解釋與來源；第一階段預設 `SIXTY_JIAZI`。
+- AI 解籤引擎：由 `ai_service` 串接 OpenAI-compatible chat completions，依籤詩、問事分類、使用者問題與擲筊結果產生繁體中文白話解籤，並保存對話紀錄。
+- 解籤網頁：前端以 QR code 進入頁面，後端提供籤系列表、籤號查詢、session 建立、解籤、聊天與可分享的 session id。
+- 後台管理：第一階段使用 Django Admin 維護籤詩與查詢紀錄，另提供 admin-only 使用統計 API。
 
 ---
 
@@ -204,16 +212,23 @@ API 基底：
 
 ```text
 GET  /api/v1/fortune-sets/
+GET  /api/v1/fortune-sets/{fortune_set_code}/fortunes/{number}/
 POST /api/v1/divinations/
 POST /api/v1/divinations/{session_id}/prayer-complete/
 POST /api/v1/divinations/{session_id}/draw/
 POST /api/v1/divinations/{session_id}/blocks/
 POST /api/v1/divinations/{session_id}/interpret/
+GET  /api/v1/divinations/{session_id}/chat/
 POST /api/v1/divinations/{session_id}/chat/
 GET  /api/v1/divinations/?anonymous_user_id={id}
 GET  /api/v1/divinations/{session_id}/
 DELETE /api/v1/divinations/{session_id}/
+GET  /api/v1/admin/usage-stats/
 ```
+
+`POST /api/v1/divinations/` 可選擇傳入 `fortune_number`。有傳入時代表使用者已在實體流程取得籤號，後端必須用 `fortune_set_code + fortune_number` 查詢啟用中的籤詩，建立 `confirmed` session；不得接受前端傳入 `fortune_id`。
+
+解籤結果頁分享不需要獨立資料表。第一階段以前端路徑加 `session_id` 分享，例如 `/divinations/{session_id}`，後端以 `GET /api/v1/divinations/{session_id}/` 取回結果。
 
 ---
 
@@ -250,6 +265,7 @@ DELETE /api/v1/divinations/{session_id}/
 - DIVINATION_ALREADY_DRAWN
 - BLOCK_CAST_LIMIT_REACHED
 - FORTUNE_SET_NOT_FOUND
+- FORTUNE_NOT_FOUND
 - FORTUNE_DATA_UNAVAILABLE
 - AI_SERVICE_UNAVAILABLE
 - INVALID_REQUEST
@@ -378,11 +394,13 @@ waiting_for_blocks
 - category 是否為允許值
 - interaction_mode 是否為 click 或 motion
 - fortune_set_code 是否存在且啟用
+- fortune_number 若有提供，必須為正整數，且只能由 Service 轉成 fortune
 - chat message 不得超過 500 字
 
 前端不得提交或修改：
 
 - fortune
+- fortune_id
 - confirmed
 - status
 - ai_interpretation
@@ -404,6 +422,14 @@ waiting_for_blocks
 - 使用短 transaction
 - 不得信任前端傳入 fortune_id
 - 不得寫死 1 到 60
+
+## 籤號輸入
+
+- 前端可提交 `fortune_number`，用於 QR code 現場流程或廟方已抽出實體籤的情境
+- 後端只能用 `fortune_set_code + fortune_number` 查詢公開且啟用的籤詩
+- 找不到籤詩時回傳 `FORTUNE_NOT_FOUND`
+- 建立成功後 `fortune` 寫入 session，`confirmed=True`，`status=confirmed`
+- 此流程可直接呼叫 `POST /api/v1/divinations/{session_id}/interpret/`
 
 ---
 
@@ -467,6 +493,13 @@ AI 不得：
 - 虛構籤詩原文或典故
 - 混用其他籤系資料
 - 使用恐嚇或詛咒語氣
+
+AI 聊天：
+
+- `POST /api/v1/divinations/{session_id}/chat/` 儲存使用者訊息與 AI 回覆
+- `GET /api/v1/divinations/{session_id}/chat/` 回傳可顯示對話紀錄
+- LLM 上下文最多帶最近 10 則非 system 訊息
+- 前端不得顯示初始解籤 prompt
 
 ---
 
@@ -540,6 +573,13 @@ Admin 顯示欄位需清楚，避免只顯示物件 ID。
 - 篩選
 - 啟用 / 停用
 - 日期排序
+
+使用統計第一階段由 `GET /api/v1/admin/usage-stats/` 提供，必須限制 admin 權限。至少回傳：
+
+- total_sessions
+- completed_sessions
+- by_status
+- by_category
 
 ---
 

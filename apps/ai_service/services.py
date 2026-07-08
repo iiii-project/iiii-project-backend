@@ -9,6 +9,15 @@ from apps.divinations.services import DomainError
 from .models import AIMessage
 
 
+def _message_data(message: AIMessage) -> dict:
+    return {
+        "id": message.id,
+        "role": message.role,
+        "content": message.content,
+        "created_at": message.created_at,
+    }
+
+
 def _category_meaning(session: DivinationSession) -> str:
     fortune = session.fortune
     field = f"{session.category}_meaning"
@@ -92,7 +101,20 @@ def interpret_session(session_uuid: str) -> DivinationSession:
     return session
 
 
-def chat_about_session(session_uuid: str, message: str) -> str:
+def list_session_messages(session_uuid: str) -> list[dict]:
+    session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
+    if session.status != "completed":
+        raise DomainError("INVALID_SESSION_STATE", "解籤完成後才能聊天", 409)
+
+    messages = list(session.ai_messages.exclude(role="system"))
+    if messages and messages[0].role == "user" and messages[0].content == _interpret_user_prompt(session):
+        messages = messages[1:]
+    if messages and messages[0].role == "assistant" and messages[0].content == session.ai_interpretation:
+        messages = messages[1:]
+    return [_message_data(message) for message in messages]
+
+
+def chat_about_session(session_uuid: str, message: str) -> dict:
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status != "completed":
         raise DomainError("INVALID_SESSION_STATE", "解籤完成後才能聊天", 409)
@@ -109,4 +131,4 @@ def chat_about_session(session_uuid: str, message: str) -> str:
             AIMessage(divination_session=session, role="assistant", content=reply, model_name=settings.LLM_MODEL),
         ]
     )
-    return reply
+    return {"reply": reply, "messages": list_session_messages(session_uuid)}

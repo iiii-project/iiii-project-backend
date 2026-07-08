@@ -2,7 +2,7 @@ import pytest
 from django.db import IntegrityError
 
 from apps.divinations.models import DivinationSession
-from apps.divinations.services import block_result, cast_blocks, complete_prayer, draw_fortune
+from apps.divinations.services import block_result, cast_blocks, complete_prayer, create_session, draw_fortune
 from apps.fortunes.models import Fortune, FortuneSet
 
 
@@ -83,3 +83,21 @@ def test_block_cast_limit(session, fortune_set, monkeypatch):
 
     assert third.attempt_number == 3
     assert session.status == "rejected"
+
+
+@pytest.mark.django_db
+def test_create_session_accepts_fortune_number(fortune_set):
+    fortune = make_fortune(fortune_set, number=8)
+
+    session = create_session(
+        fortune_set_code=fortune_set.code,
+        question="最近適合換工作嗎？",
+        category="career",
+        interaction_mode="click",
+        anonymous_user_id="guest",
+        fortune_number=8,
+    )
+
+    assert session.fortune_id == fortune.id
+    assert session.status == "confirmed"
+    assert session.confirmed is True

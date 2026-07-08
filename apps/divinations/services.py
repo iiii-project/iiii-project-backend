@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
-from apps.fortunes.models import FortuneSet
+from apps.fortunes.models import Fortune, FortuneSet
 
 from .models import BlockCast, DivinationSession
 
@@ -21,18 +21,40 @@ class DomainError(APIException):
         self.default_code = code
 
 
-def create_session(*, fortune_set_code: str, question: str, category: str, interaction_mode: str, anonymous_user_id: str):
+def create_session(
+    *,
+    fortune_set_code: str,
+    question: str,
+    category: str,
+    interaction_mode: str,
+    anonymous_user_id: str,
+    fortune_number: int | None = None,
+):
     try:
         fortune_set = FortuneSet.objects.get(code=fortune_set_code, is_active=True)
     except FortuneSet.DoesNotExist as exc:
         raise DomainError("FORTUNE_SET_NOT_FOUND", "找不到可用籤系", 404) from exc
 
+    fortune = None
+    status = "created"
+    confirmed = False
+    if fortune_number is not None:
+        try:
+            fortune = Fortune.objects.get(fortune_set=fortune_set, number=fortune_number, is_active=True)
+        except Fortune.DoesNotExist as exc:
+            raise DomainError("FORTUNE_NOT_FOUND", "找不到可用籤詩", 404) from exc
+        status = "confirmed"
+        confirmed = True
+
     return DivinationSession.objects.create(
         fortune_set=fortune_set,
+        fortune=fortune,
         question=question,
         category=category,
         interaction_mode=interaction_mode,
         anonymous_user_id=anonymous_user_id,
+        status=status,
+        confirmed=confirmed,
     )
 
 

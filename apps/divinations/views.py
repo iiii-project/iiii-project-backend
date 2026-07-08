@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.ai_service.services import chat_about_session, interpret_session
+from apps.ai_service.services import chat_about_session, interpret_session, list_session_messages
 from config.utils import ok
 
 from .models import DivinationSession
@@ -85,8 +85,12 @@ class ChatView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    def get(self, request, session_id):
+        return Response(ok({"messages": list_session_messages(session_id), "remaining_messages": None}))
+
     def post(self, request, session_id):
         serializer = ChatSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reply = chat_about_session(session_id, serializer.validated_data["message"])
-        return Response(ok({"reply": reply, "remaining_messages": None}))
+        data = chat_about_session(session_id, serializer.validated_data["message"])
+        data["remaining_messages"] = None
+        return Response(ok(data))
