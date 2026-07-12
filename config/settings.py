@@ -9,6 +9,11 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY") or "dev-only-change-me"
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+CSRF_TRUSTED_ORIGINS = [
+    origin
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
