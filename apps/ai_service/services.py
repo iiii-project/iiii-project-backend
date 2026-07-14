@@ -130,18 +130,16 @@ def interpret_session(session_uuid: str, request_data: dict | None = None) -> Di
     if request_data:
         updated_fields = []
         question = request_data.get("question")
-        category = request_data.get("category")
         categories = request_data.get("categories")
 
         if question and question != session.question:
             session.question = question
             updated_fields.append("question")
-        if category and category != session.category:
-            session.category = category
-            updated_fields.append("category")
         if categories and categories != session.categories:
             session.categories = categories
+            session.category = categories[0]
             updated_fields.append("categories")
+            updated_fields.append("category")
 
         if updated_fields:
             updated_fields.append("updated_at")

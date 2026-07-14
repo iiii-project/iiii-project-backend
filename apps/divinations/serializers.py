@@ -9,10 +9,9 @@ from .models import BlockCast, DivinationSession
 class DivinationCreateSerializer(serializers.Serializer):
     fortune_set_code = serializers.CharField(max_length=50, default="SIXTY_JIAZI")
     question = serializers.CharField(min_length=2, max_length=300)
-    category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES, required=False)
     categories = serializers.ListField(
         child=serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES),
-        required=False,
+        required=True,
         allow_empty=False,
     )
     interaction_mode = serializers.ChoiceField(choices=DivinationSession.INTERACTION_CHOICES)
@@ -25,20 +24,10 @@ class DivinationCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        categories = attrs.get('categories')
-        category = attrs.get('category')
-
-        if categories:
-            deduped = []
-            for item in categories:
-                if item not in deduped:
-                    deduped.append(item)
-            attrs['categories'] = deduped
-            attrs['category'] = category or deduped[0]
-        elif category:
-            attrs['categories'] = [category]
-        else:
-            raise serializers.ValidationError({'categories': '請至少選擇一個求籤主題。'})
+        if "category" in self.initial_data:
+            raise serializers.ValidationError({"category": "請改用 categories。"})
+        attrs["categories"] = list(dict.fromkeys(attrs["categories"]))
+        attrs["category"] = attrs["categories"][0]
         return attrs
 
 
@@ -58,7 +47,6 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
             "fortune_set",
             "fortune",
             "question",
-            "category",
             "categories",
             "interaction_mode",
             "status",
@@ -83,7 +71,6 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
 
 class InterpretRequestSerializer(serializers.Serializer):
     question = serializers.CharField(min_length=2, max_length=300, required=False)
-    category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES, required=False)
     categories = serializers.ListField(
         child=serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES),
         required=False,
@@ -92,18 +79,12 @@ class InterpretRequestSerializer(serializers.Serializer):
     divination_result = serializers.DictField(required=False)
 
     def validate(self, attrs):
+        if "category" in self.initial_data:
+            raise serializers.ValidationError({"category": "請改用 categories。"})
         categories = attrs.get("categories")
-        category = attrs.get("category")
-
         if categories:
-            deduped = []
-            for item in categories:
-                if item not in deduped:
-                    deduped.append(item)
-            attrs["categories"] = deduped
-            attrs["category"] = category or deduped[0]
-        elif category:
-            attrs["categories"] = [category]
+            attrs["categories"] = list(dict.fromkeys(categories))
+            attrs["category"] = attrs["categories"][0]
 
         return attrs
 

@@ -25,6 +25,27 @@ def test_non_api_routes_are_not_served():
 
 
 @pytest.mark.django_db
+def test_divination_accepts_categories_only():
+    response = APIClient().post(
+        "/api/v1/divinations/",
+        {"question": "工作是否順利？", "categories": ["career"], "interaction_mode": "click"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.data["data"]["categories"] == ["career"]
+    assert "category" not in response.data["data"]
+
+    response = APIClient().post(
+        "/api/v1/divinations/",
+        {"question": "工作是否順利？", "category": "career", "interaction_mode": "click"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
 def test_usage_stats_requires_admin():
     response = APIClient().get("/api/v1/admin/usage-stats/")
 
