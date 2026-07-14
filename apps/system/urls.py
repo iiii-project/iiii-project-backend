@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import FrontendAppView, HealthView, HomeContentView
+from .views import HealthView, HomeContentView
 from .views import UsageStatsView
 
 urlpatterns = [

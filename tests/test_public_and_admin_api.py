@@ -18,6 +18,12 @@ def test_fortune_detail_api_gets_public_active_fortune():
     assert response.data["data"]["poem"] == "籤詩"
 
 
+def test_non_api_routes_are_not_served():
+    response = APIClient().get("/")
+
+    assert response.status_code == 404
+
+
 @pytest.mark.django_db
 def test_usage_stats_requires_admin():
     response = APIClient().get("/api/v1/admin/usage-stats/")
