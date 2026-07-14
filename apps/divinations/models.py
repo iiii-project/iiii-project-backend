@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -29,6 +30,13 @@ class DivinationSession(models.Model):
     ]
 
     session_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="divination_sessions",
+    )
     anonymous_user_id = models.CharField(max_length=100, blank=True)
     fortune_set = models.ForeignKey("fortunes.FortuneSet", on_delete=models.PROTECT, related_name="sessions")
     fortune = models.ForeignKey(
@@ -36,6 +44,7 @@ class DivinationSession(models.Model):
     )
     question = models.TextField()
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES)
+    categories = models.JSONField(default=list, blank=True)
     interaction_mode = models.CharField(max_length=20, choices=INTERACTION_CHOICES)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="created")
     confirmed = models.BooleanField(default=False)

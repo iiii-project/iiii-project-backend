@@ -120,12 +120,32 @@ def _llm_span(messages: list[dict[str, str]]):
         span_context.__exit__(None, None, None)
 
 
-def interpret_session(session_uuid: str) -> DivinationSession:
+def interpret_session(session_uuid: str, request_data: dict | None = None) -> DivinationSession:
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status == "completed" and session.ai_interpretation:
         return session
     if not session.confirmed or session.status not in {"confirmed", "completed"} or not session.fortune_id:
         raise DomainError("INVALID_SESSION_STATE", "尚未取得聖筊，不能解籤", 409)
+
+    if request_data:
+        updated_fields = []
+        question = request_data.get("question")
+        category = request_data.get("category")
+        categories = request_data.get("categories")
+
+        if question and question != session.question:
+            session.question = question
+            updated_fields.append("question")
+        if category and category != session.category:
+            session.category = category
+            updated_fields.append("category")
+        if categories and categories != session.categories:
+            session.categories = categories
+            updated_fields.append("categories")
+
+        if updated_fields:
+            updated_fields.append("updated_at")
+            session.save(update_fields=updated_fields)
 
     system_prompt = _system_prompt(session)
     user_prompt = _interpret_user_prompt(session)

@@ -9,7 +9,12 @@ from .models import BlockCast, DivinationSession
 class DivinationCreateSerializer(serializers.Serializer):
     fortune_set_code = serializers.CharField(max_length=50, default="SIXTY_JIAZI")
     question = serializers.CharField(min_length=2, max_length=300)
-    category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES)
+    category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES, required=False)
+    categories = serializers.ListField(
+        child=serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES),
+        required=False,
+        allow_empty=False,
+    )
     interaction_mode = serializers.ChoiceField(choices=DivinationSession.INTERACTION_CHOICES)
     anonymous_user_id = serializers.CharField(max_length=100, allow_blank=True, required=False, default="")
     fortune_number = serializers.IntegerField(min_value=1, required=False)
@@ -19,9 +24,27 @@ class DivinationCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("找不到可用籤系")
         return value
 
+    def validate(self, attrs):
+        categories = attrs.get('categories')
+        category = attrs.get('category')
+
+        if categories:
+            deduped = []
+            for item in categories:
+                if item not in deduped:
+                    deduped.append(item)
+            attrs['categories'] = deduped
+            attrs['category'] = category or deduped[0]
+        elif category:
+            attrs['categories'] = [category]
+        else:
+            raise serializers.ValidationError({'categories': '請至少選擇一個求籤主題。'})
+        return attrs
+
 
 class DivinationSessionSerializer(serializers.ModelSerializer):
     session_id = serializers.CharField(source="session_uuid", read_only=True)
+    user = serializers.IntegerField(source="user_id", read_only=True)
     fortune_set = FortuneSetSerializer(read_only=True)
     fortune = FortuneSerializer(read_only=True)
     interpretation = serializers.SerializerMethodField()
@@ -30,11 +53,13 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
         model = DivinationSession
         fields = [
             "session_id",
+            "user",
             "anonymous_user_id",
             "fortune_set",
             "fortune",
             "question",
             "category",
+            "categories",
             "interaction_mode",
             "status",
             "confirmed",
@@ -54,6 +79,33 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
             "suggested_actions": [],
             "warnings": ["本系統僅供文化體驗及參考。"],
         }
+
+
+class InterpretRequestSerializer(serializers.Serializer):
+    question = serializers.CharField(min_length=2, max_length=300, required=False)
+    category = serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES, required=False)
+    categories = serializers.ListField(
+        child=serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES),
+        required=False,
+        allow_empty=False,
+    )
+    divination_result = serializers.DictField(required=False)
+
+    def validate(self, attrs):
+        categories = attrs.get("categories")
+        category = attrs.get("category")
+
+        if categories:
+            deduped = []
+            for item in categories:
+                if item not in deduped:
+                    deduped.append(item)
+            attrs["categories"] = deduped
+            attrs["category"] = category or deduped[0]
+        elif category:
+            attrs["categories"] = [category]
+
+        return attrs
 
 
 class BlockCastSerializer(serializers.ModelSerializer):

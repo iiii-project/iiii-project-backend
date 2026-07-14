@@ -1,5 +1,6 @@
 from django.db.models import Count
 from rest_framework.permissions import IsAdminUser
+from django.views.generic import TemplateView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -30,3 +31,25 @@ class UsageStatsView(APIView):
                 }
             )
         )
+
+
+class HomeContentView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return Response(
+            ok(
+                {
+                    "eyebrow": "TAIWAN TEMPLE ORACLE · 六十甲子籤",
+                    "title": "AI 求籤互動系統",
+                    "description": "以網頁互動、動作辨識與 AI 解說重現求籤流程，作為傳統文化展示、教育與娛樂參考。",
+                    "steps": ["輸入問題", "燒香祈求", "搖籤", "擲筊確認", "AI 解籤"],
+                    "notice": "攝影機影像只在瀏覽器內處理，不會上傳後端。系統不宣稱預測未來，AI 回答僅供文化體驗及參考。",
+                }
+            )
+        )
+
+
+class FrontendAppView(TemplateView):
+    template_name = "index.html"

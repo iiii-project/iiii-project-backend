@@ -26,9 +26,11 @@ def create_session(
     fortune_set_code: str,
     question: str,
     category: str,
+    categories: list[str] | None = None,
     interaction_mode: str,
     anonymous_user_id: str,
     fortune_number: int | None = None,
+    user=None,
 ):
     try:
         fortune_set = FortuneSet.objects.get(code=fortune_set_code, is_active=True)
@@ -47,10 +49,12 @@ def create_session(
         confirmed = True
 
     return DivinationSession.objects.create(
+        user=user,
         fortune_set=fortune_set,
         fortune=fortune,
         question=question,
         category=category,
+        categories=categories or [category],
         interaction_mode=interaction_mode,
         anonymous_user_id=anonymous_user_id,
         status=status,
@@ -83,6 +87,30 @@ def draw_fortune(session_uuid: str) -> DivinationSession:
     session.fortune_id = random.choice(fortune_ids)
     session.status = "waiting_for_blocks"
     session.save(update_fields=["fortune", "status", "updated_at"])
+    return session
+
+
+@transaction.atomic
+def complete_quick_divination(session_uuid: str) -> DivinationSession:
+    """Draw and complete a click-based session without the motion ritual."""
+    session = DivinationSession.objects.select_for_update().get(session_uuid=session_uuid)
+    if session.status == "created":
+        session.status = "drawing"
+        session.save(update_fields=["status", "updated_at"])
+
+    if session.status == "drawing":
+        fortune_ids = list(session.fortune_set.fortunes.filter(is_active=True).values_list("id", flat=True))
+        if not fortune_ids:
+            raise DomainError("FORTUNE_DATA_UNAVAILABLE", "目前籤系沒有可用籤詩", 409)
+        session.fortune_id = random.choice(fortune_ids)
+
+    if not session.fortune_id:
+        raise DomainError("INVALID_SESSION_STATE", "目前狀態不可快速求籤", 409)
+
+    session.confirmed = True
+    session.status = "completed"
+    session.completed_at = timezone.now()
+    session.save(update_fields=["fortune", "confirmed", "status", "completed_at", "updated_at"])
     return session
 
 
