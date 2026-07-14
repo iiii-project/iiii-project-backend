@@ -70,19 +70,39 @@ def test_block_result_mapping():
 
 
 @pytest.mark.django_db
-def test_block_cast_limit(session, fortune_set, monkeypatch):
+def test_non_sheng_requires_a_new_fortune_draw(session, fortune_set, monkeypatch):
     make_fortune(fortune_set)
     complete_prayer(session.session_uuid)
     draw_fortune(session.session_uuid)
     monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: "flat")
 
-    cast_blocks(session.session_uuid)
-    cast_blocks(session.session_uuid)
+    cast = cast_blocks(session.session_uuid)
+    session.refresh_from_db()
+
+    assert cast.result == "xiao"
+    assert session.fortune is None
+    assert session.status == "drawing"
+    assert session.block_casts.count() == 0
+    monkeypatch.undo()
+    assert draw_fortune(session.session_uuid).status == "waiting_for_blocks"
+
+
+@pytest.mark.django_db
+def test_three_consecutive_sheng_results_confirm_session(session, fortune_set, monkeypatch):
+    make_fortune(fortune_set)
+    complete_prayer(session.session_uuid)
+    draw_fortune(session.session_uuid)
+    sides = iter(["flat", "round"] * 3)
+    monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: next(sides))
+
+    first = cast_blocks(session.session_uuid)
+    second = cast_blocks(session.session_uuid)
     third = cast_blocks(session.session_uuid)
     session.refresh_from_db()
 
-    assert third.attempt_number == 3
-    assert session.status == "rejected"
+    assert [first.result, second.result, third.result] == ["sheng", "sheng", "sheng"]
+    assert session.confirmed is True
+    assert session.status == "confirmed"
 
 
 @pytest.mark.django_db

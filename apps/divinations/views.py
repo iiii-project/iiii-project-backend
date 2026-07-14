@@ -15,7 +15,7 @@ from .serializers import (
     DivinationSessionSerializer,
     InterpretRequestSerializer,
 )
-from .services import cast_blocks, complete_prayer, complete_quick_divination, create_session, draw_fortune
+from .services import cast_blocks, complete_prayer, create_session, draw_fortune
 
 
 def _print_divination_debug(label: str, payload: dict) -> None:
@@ -97,21 +97,6 @@ class DrawFortuneView(APIView):
         DivinationDetailView().get_object(request, session_id)
         session = draw_fortune(session_id)
         return Response(ok(DivinationSessionSerializer(session).data))
-
-
-class QuickDivinationView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, session_id):
-        DivinationDetailView().get_object(request, session_id)
-        session = complete_quick_divination(session_id)
-        _print_divination_debug(
-            "QUICK DIVINATION COMPLETED",
-            {"session_id": str(session_id), "question": session.question, "category": session.category},
-        )
-        return Response(ok(DivinationSessionSerializer(session).data))
-
-
 class BlockCastView(APIView):
     permission_classes = [AllowAny]
 

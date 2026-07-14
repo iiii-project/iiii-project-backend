@@ -221,35 +221,29 @@ Authorization: Bearer <access_token>
 
 無 request body。僅限 `drawing` 狀態，隨機選出一支啟用籤詩並將狀態改為 `waiting_for_blocks`。已經抽過籤時會直接回傳原紀錄。
 
-### 快速求籤
-
-`POST /divinations/{session_id}/quick-result/`
-
-無 request body。適用於 `click` 流程：抽出籤詩、確認籤詩並將狀態改為 `completed`。之後可呼叫解籤端點產生 AI 解說。
-
 ### 擲筊
 
 `POST /divinations/{session_id}/blocks/`
 
-無 request body。僅限 `waiting_for_blocks` 狀態，每筆紀錄最多 3 次。回傳：
+無 request body。僅限 `waiting_for_blocks` 狀態；每一輪籤必須連續擲出 3 次聖筊。回傳：
 
 ```json
 {
   "success": true,
   "data": {
-    "attempt_number": 1,
+    "attempt_number": 3,
     "block_one": "flat",
     "block_two": "round",
     "result": "sheng",
     "result_name": "聖筊",
     "confirmed": true,
-    "remaining_attempts": 2
+    "remaining_attempts": 0
   },
   "message": "操作成功"
 }
 ```
 
-`result` 為 `sheng` 時紀錄改為 `confirmed`；第 3 次仍未得到 `sheng` 時改為 `rejected`。
+第 3 次連續取得 `sheng` 時紀錄才改為 `confirmed`。任一次結果不是 `sheng` 時，系統立即清除該輪籤與擲筊結果、將狀態改回 `drawing`；請重新呼叫抽籤端點後開始新一輪。非聖筊回應的 `remaining_attempts` 為 `0`。
 
 ### AI 解籤
 
@@ -297,8 +291,6 @@ Authorization: Bearer <access_token>
 ### 標準流程
 
 一般流程：建立紀錄 -> 完成祈求 -> 抽籤 -> 擲筊直到確認 -> AI 解籤 -> AI 對話。
-
-快速流程：建立紀錄 -> 快速求籤 -> AI 解籤 -> AI 對話。
 
 ## 系統與管理
 

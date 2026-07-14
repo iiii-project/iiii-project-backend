@@ -1,7 +1,6 @@
 import random
 
 from django.db import transaction
-from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from apps.fortunes.models import Fortune, FortuneSet
@@ -90,30 +89,6 @@ def draw_fortune(session_uuid: str) -> DivinationSession:
     return session
 
 
-@transaction.atomic
-def complete_quick_divination(session_uuid: str) -> DivinationSession:
-    """Draw and complete a click-based session without the motion ritual."""
-    session = DivinationSession.objects.select_for_update().get(session_uuid=session_uuid)
-    if session.status == "created":
-        session.status = "drawing"
-        session.save(update_fields=["status", "updated_at"])
-
-    if session.status == "drawing":
-        fortune_ids = list(session.fortune_set.fortunes.filter(is_active=True).values_list("id", flat=True))
-        if not fortune_ids:
-            raise DomainError("FORTUNE_DATA_UNAVAILABLE", "目前籤系沒有可用籤詩", 409)
-        session.fortune_id = random.choice(fortune_ids)
-
-    if not session.fortune_id:
-        raise DomainError("INVALID_SESSION_STATE", "目前狀態不可快速求籤", 409)
-
-    session.confirmed = True
-    session.status = "completed"
-    session.completed_at = timezone.now()
-    session.save(update_fields=["fortune", "confirmed", "status", "completed_at", "updated_at"])
-    return session
-
-
 def block_result(block_one: str, block_two: str) -> str:
     if block_one == block_two == "flat":
         return "xiao"
@@ -145,13 +120,14 @@ def cast_blocks(session_uuid: str) -> BlockCast:
         result=result,
     )
 
-    if result == "sheng":
+    if result != "sheng":
+        session.block_casts.all().delete()
+        session.fortune = None
+        session.status = "drawing"
+        session.save(update_fields=["fortune", "status", "updated_at"])
+    elif attempt_number == MAX_BLOCK_CAST_ATTEMPTS:
         session.confirmed = True
         session.status = "confirmed"
         session.save(update_fields=["confirmed", "status", "updated_at"])
-    elif attempt_number == MAX_BLOCK_CAST_ATTEMPTS:
-        session.status = "rejected"
-        session.completed_at = timezone.now()
-        session.save(update_fields=["status", "completed_at", "updated_at"])
 
     return cast
