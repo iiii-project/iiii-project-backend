@@ -243,7 +243,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-第 3 次連續取得 `sheng` 時紀錄才改為 `confirmed`。任一次結果不是 `sheng` 時，系統立即清除該輪籤與擲筊結果、將狀態改回 `drawing`；請重新呼叫抽籤端點後開始新一輪。非聖筊回應的 `remaining_attempts` 為 `0`。
+首次取得 `sheng` 時，紀錄立即改為 `confirmed`。結果不是 `sheng` 時，系統立即清除該輪籤與擲筊結果、將狀態改回 `drawing`；請重新呼叫抽籤端點後開始新一輪。`remaining_attempts` 固定為 `0`。
 
 ### AI 解籤
 

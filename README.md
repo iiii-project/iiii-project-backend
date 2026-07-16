@@ -25,6 +25,7 @@ DJANGO_SECRET_KEY=change-me
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 CORS_ALLOWED_ORIGINS=http://localhost:5173
+CSRF_TRUSTED_ORIGINS=http://localhost:5173
 LLM_BASE_URL=http://localhost:1234/v1
 LLM_API_KEY=
 LLM_MODEL=local-model

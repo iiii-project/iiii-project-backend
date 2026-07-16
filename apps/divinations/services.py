@@ -7,9 +7,6 @@ from apps.fortunes.models import Fortune, FortuneSet
 
 from .models import BlockCast, DivinationSession
 
-MAX_BLOCK_CAST_ATTEMPTS = 3
-
-
 class DomainError(APIException):
     status_code = 400
     default_code = "INVALID_REQUEST"
@@ -106,9 +103,6 @@ def cast_blocks(session_uuid: str) -> BlockCast:
         raise DomainError("INVALID_SESSION_STATE", "已取得聖筊，不可再次擲筊", 409)
 
     attempt_number = session.block_casts.count() + 1
-    if attempt_number > MAX_BLOCK_CAST_ATTEMPTS:
-        raise DomainError("BLOCK_CAST_LIMIT_REACHED", "擲筊次數已達上限", 409)
-
     block_one = random.choice(["flat", "round"])
     block_two = random.choice(["flat", "round"])
     result = block_result(block_one, block_two)
@@ -125,7 +119,7 @@ def cast_blocks(session_uuid: str) -> BlockCast:
         session.fortune = None
         session.status = "drawing"
         session.save(update_fields=["fortune", "status", "updated_at"])
-    elif attempt_number == MAX_BLOCK_CAST_ATTEMPTS:
+    else:
         session.confirmed = True
         session.status = "confirmed"
         session.save(update_fields=["confirmed", "status", "updated_at"])

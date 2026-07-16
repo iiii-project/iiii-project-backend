@@ -2,6 +2,7 @@ import pytest
 from django.db import IntegrityError
 
 from apps.divinations.models import DivinationSession
+from apps.divinations.serializers import BlockCastSerializer
 from apps.divinations.services import block_result, cast_blocks, complete_prayer, create_session, draw_fortune
 from apps.fortunes.models import Fortune, FortuneSet
 
@@ -88,19 +89,18 @@ def test_non_sheng_requires_a_new_fortune_draw(session, fortune_set, monkeypatch
 
 
 @pytest.mark.django_db
-def test_three_consecutive_sheng_results_confirm_session(session, fortune_set, monkeypatch):
+def test_one_sheng_result_confirms_session(session, fortune_set, monkeypatch):
     make_fortune(fortune_set)
     complete_prayer(session.session_uuid)
     draw_fortune(session.session_uuid)
-    sides = iter(["flat", "round"] * 3)
+    sides = iter(["flat", "round"])
     monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: next(sides))
 
-    first = cast_blocks(session.session_uuid)
-    second = cast_blocks(session.session_uuid)
-    third = cast_blocks(session.session_uuid)
+    cast = cast_blocks(session.session_uuid)
     session.refresh_from_db()
 
-    assert [first.result, second.result, third.result] == ["sheng", "sheng", "sheng"]
+    assert cast.result == "sheng"
+    assert BlockCastSerializer(cast).data["remaining_attempts"] == 0
     assert session.confirmed is True
     assert session.status == "confirmed"
 
