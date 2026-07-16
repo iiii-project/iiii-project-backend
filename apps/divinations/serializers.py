@@ -107,7 +107,9 @@ class BlockCastSerializer(serializers.ModelSerializer):
         ]
 
     def get_remaining_attempts(self, obj):
-        return 0
+        if obj.result != "sheng":
+            return 0
+        return max(0, 3 - obj.attempt_number)
 
 
 class ChatSerializer(serializers.Serializer):
