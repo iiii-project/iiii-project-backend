@@ -1,0 +1,35 @@
+meta {
+  name: Get JWT
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/token/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}"
+  }
+}
+
+tests {
+  test("returns JWT access and refresh tokens", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.access).to.be.a("string").and.not.empty;
+    expect(res.body.refresh).to.be.a("string").and.not.empty;
+  });
+}
+
+script:post-response {
+  bru.setVar("accessToken", res.body.access);
+  bru.setVar("refreshToken", res.body.refresh);
+}

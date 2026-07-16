@@ -1,0 +1,20 @@
+meta {
+  name: List Chat Messages
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/divinations/{{confirmedSessionId}}/chat/
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns the completed session chat history", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.messages).to.be.an("array");
+    expect(res.body.data.remaining_messages).to.equal(null);
+  });
+}

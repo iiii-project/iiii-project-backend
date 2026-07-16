@@ -1,0 +1,30 @@
+meta {
+  name: Send Chat Message
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/divinations/{{confirmedSessionId}}/chat/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "message": "請再提供一項具體的職涯建議。"
+  }
+}
+
+tests {
+  test("returns an AI chat reply", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.reply).to.be.a("object");
+    expect(res.body.data.remaining_messages).to.equal(null);
+  });
+}

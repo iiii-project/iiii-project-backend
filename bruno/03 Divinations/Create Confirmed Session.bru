@@ -1,0 +1,40 @@
+meta {
+  name: Create Confirmed Session
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/divinations/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "fortune_set_code": "{{fortuneSetCode}}",
+    "fortune_number": {{fortuneNumber}},
+    "question": "Bruno 測試：這支籤對我的職涯有何建議？",
+    "categories": ["career"],
+    "interaction_mode": "click",
+    "anonymous_user_id": "{{anonymousUserId}}"
+  }
+}
+
+tests {
+  test("creates a confirmed session with the requested fortune", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.status).to.equal("confirmed");
+    expect(res.body.data.confirmed).to.equal(true);
+    expect(res.body.data.fortune.number).to.equal(Number(bru.getEnvVar("fortuneNumber")));
+  });
+}
+
+script:post-response {
+  bru.setVar("confirmedSessionId", res.body.data.session_id);
+}

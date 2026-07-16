@@ -1,0 +1,22 @@
+meta {
+  name: Cast Blocks
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/divinations/{{sessionId}}/blocks/
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns one valid block-cast result", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.attempt_number).to.equal(1);
+    expect(res.body.data.result).to.be.oneOf(["sheng", "xiao", "yin"]);
+    expect(res.body.data.remaining_attempts).to.equal(0);
+    expect(res.body.data.confirmed).to.equal(res.body.data.result === "sheng");
+  });
+}

@@ -1,0 +1,33 @@
+meta {
+  name: Interpret Session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/divinations/{{confirmedSessionId}}/interpret/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "question": "Bruno 測試：這支籤對我的職涯有何建議？",
+    "categories": ["career"],
+    "divination_result": {}
+  }
+}
+
+tests {
+  test("completes the AI interpretation", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.status).to.equal("completed");
+    expect(res.body.data.confirmed).to.equal(true);
+    expect(res.body.data.ai_interpretation).to.be.a("string").and.not.empty;
+  });
+}

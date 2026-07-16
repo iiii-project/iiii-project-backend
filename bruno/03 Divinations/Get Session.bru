@@ -1,0 +1,20 @@
+meta {
+  name: Get Session
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/divinations/{{confirmedSessionId}}/
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns the confirmed session", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.session_id).to.equal(bru.getVar("confirmedSessionId"));
+    expect(res.body.data.status).to.equal("confirmed");
+  });
+}

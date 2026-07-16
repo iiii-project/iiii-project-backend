@@ -225,13 +225,13 @@ Authorization: Bearer <access_token>
 
 `POST /divinations/{session_id}/blocks/`
 
-無 request body。僅限 `waiting_for_blocks` 狀態；每一輪籤必須連續擲出 3 次聖筊。回傳：
+無 request body。僅限 `waiting_for_blocks` 狀態；首次擲出聖筊即確認。回傳：
 
 ```json
 {
   "success": true,
   "data": {
-    "attempt_number": 3,
+    "attempt_number": 1,
     "block_one": "flat",
     "block_two": "round",
     "result": "sheng",

@@ -1,0 +1,19 @@
+meta {
+  name: List Fortune Sets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/fortune-sets/
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns public active fortune sets", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.items).to.be.an("array");
+  });
+}

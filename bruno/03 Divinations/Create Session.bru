@@ -1,0 +1,41 @@
+meta {
+  name: Create Session
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/divinations/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "fortune_set_code": "{{fortuneSetCode}}",
+    "question": "Bruno 測試：近期職涯發展是否順利？",
+    "categories": ["career"],
+    "interaction_mode": "click",
+    "anonymous_user_id": "{{anonymousUserId}}"
+  }
+}
+
+tests {
+  test("creates an unconfirmed session", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.session_id).to.be.a("string");
+    expect(res.body.data.status).to.equal("created");
+    expect(res.body.data.categories).to.deep.equal(["career"]);
+    expect(res.body.data.interaction_mode).to.equal("click");
+    expect(res.body.data.confirmed).to.equal(false);
+  });
+}
+
+script:post-response {
+  bru.setVar("sessionId", res.body.data.session_id);
+}

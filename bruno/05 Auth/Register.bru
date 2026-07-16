@@ -1,0 +1,38 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/register/
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+tests {
+  test("registers a user and returns JWTs", function () {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.user.username).to.equal(bru.getEnvVar("username"));
+    expect(res.body.data.access).to.be.a("string").and.not.empty;
+    expect(res.body.data.refresh).to.be.a("string").and.not.empty;
+  });
+}
+
+script:post-response {
+  bru.setVar("accessToken", res.body.data.access);
+  bru.setVar("refreshToken", res.body.data.refresh);
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Complete Prayer
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/divinations/{{sessionId}}/prayer-complete/
+  body: none
+  auth: none
+}
+
+tests {
+  test("moves the session to drawing", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.status).to.equal("drawing");
+  });
+}

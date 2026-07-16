@@ -1,0 +1,20 @@
+meta {
+  name: Get Fortune Detail
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/fortune-sets/{{fortuneSetCode}}/fortunes/{{fortuneNumber}}/
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns the requested fortune", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.number).to.equal(Number(bru.getEnvVar("fortuneNumber")));
+    expect(res.body.data.poem).to.be.a("string");
+  });
+}
