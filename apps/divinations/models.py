@@ -30,6 +30,7 @@ class DivinationSession(models.Model):
     ]
 
     session_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

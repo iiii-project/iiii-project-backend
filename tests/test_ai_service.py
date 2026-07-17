@@ -8,6 +8,7 @@ from apps.ai_service.services import (
     chat_about_session,
     interpret_session,
     list_session_messages,
+    prewarm_interpretation,
 )
 from apps.divinations.models import DivinationSession
 from apps.divinations.services import DomainError
@@ -266,3 +267,69 @@ def test_list_session_messages_hides_initial_interpretation_prompt():
     messages = list_session_messages(session.session_uuid)
 
     assert [message["content"] for message in messages] == ["追問"]
+
+
+def _confirmed_session(number, question="最近適合換工作嗎？"):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=number, poem="詩")
+    return DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question=question,
+        category="career",
+        interaction_mode="click",
+        status="confirmed",
+        confirmed=True,
+    )
+
+
+@pytest.mark.django_db
+def test_prewarmed_interpretation_is_reused_without_calling_llm_again(monkeypatch, settings):
+    """抽籤時預熱好的解籤，擲筊後要直接拿來用，不再多跑一次 LLM。"""
+    settings.INTERPRET_PREWARM_ENABLED = True
+    session = _confirmed_session(number=11)
+    calls = []
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: calls.append(messages) or "預熱好的解籤")
+
+    # 抽籤那一刻的預熱：擲筊結果還沒產生，用必然成立的 sheng 當條件
+    prewarm_interpretation(session)
+    result = interpret_session(session.session_uuid)
+
+    assert result.ai_interpretation == "預熱好的解籤"
+    assert len(calls) == 1  # 只有預熱那一次
+
+
+@pytest.mark.django_db
+def test_prewarm_is_ignored_after_redrawing_a_different_fortune(monkeypatch, settings):
+    """非聖筊會重抽籤，前一支籤的預熱結果不可以被拿去解新的籤。"""
+    settings.INTERPRET_PREWARM_ENABLED = True
+    session = _confirmed_session(number=12)
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "舊籤的解籤")
+    prewarm_interpretation(session)
+
+    # 重抽：換成另一支籤（模擬 cast_blocks 擲出非聖筊後重新 draw）
+    session.fortune = Fortune.objects.create(fortune_set=session.fortune_set, number=13, poem="另一首")
+    session.save(update_fields=["fortune"])
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "新籤的解籤")
+
+    result = interpret_session(session.session_uuid)
+
+    assert result.ai_interpretation == "新籤的解籤"
+
+
+@pytest.mark.django_db
+def test_prewarm_failure_falls_back_to_generating_on_demand(monkeypatch, settings):
+    """預熱失敗（例如 LLM 暫時掛掉）不能拖垮解籤，照原路重跑一次就好。"""
+    settings.INTERPRET_PREWARM_ENABLED = True
+    session = _confirmed_session(number=14)
+
+    def boom(messages):
+        raise RuntimeError("LLM 掛了")
+
+    monkeypatch.setattr("apps.ai_service.services._chat", boom)
+    prewarm_interpretation(session)
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "現場生成的解籤")
+
+    result = interpret_session(session.session_uuid)
+
+    assert result.ai_interpretation == "現場生成的解籤"

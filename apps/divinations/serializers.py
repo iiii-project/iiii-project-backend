@@ -47,6 +47,7 @@ class DivinationSessionSerializer(serializers.ModelSerializer):
         model = DivinationSession
         fields = [
             "session_id",
+            "share_token",
             "user",
             "anonymous_user_id",
             "fortune_set",

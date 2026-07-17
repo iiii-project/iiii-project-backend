@@ -1,3 +1,8 @@
+import os
+import threading
+from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from contextlib import contextmanager
 
 import httpx
@@ -42,9 +47,9 @@ def _system_prompt(session: DivinationSession) -> str:
     )
 
 
-def _interpret_user_prompt(session: DivinationSession) -> str:
+def _interpret_user_prompt(session: DivinationSession, casts_override: str | None = None) -> str:
     fortune = session.fortune
-    casts = ", ".join(session.block_casts.values_list("result", flat=True))
+    casts = casts_override if casts_override is not None else ", ".join(session.block_casts.values_list("result", flat=True))
     return f"""
 籤系：{session.fortune_set.name}
 使用者問題：{session.question}
@@ -64,6 +69,25 @@ def _interpret_user_prompt(session: DivinationSession) -> str:
 """.strip()
 
 
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
+
+def _trust_env_for_llm() -> bool:
+    """本機模型不要經過系統代理。
+
+    httpx 預設 trust_env=True，在 macOS 上會去讀「系統設定 → 網路 → 代理伺服器」
+    （透過 urllib 的 getproxies()）。只要那裡設了 HTTP 代理，連
+    http://localhost:1234 這種本機請求都會被送去代理，然後回 404/400——
+    表現出來就是「AI 解籤暫時無法使用」，但模型其實好好地在跑。
+    curl 不讀那份設定，所以手動測都會過，只有後端打不到，很難查。
+
+    因此：LLM 在 loopback 位址時一律略過環境代理；指向外部主機時才照原本的行為
+    （企業環境可能真的需要代理）。
+    """
+    host = httpx.URL(settings.LLM_BASE_URL).host
+    return host not in _LOOPBACK_HOSTS
+
+
 def _chat(messages: list[dict[str, str]]) -> str:
     headers = {}
     if settings.LLM_API_KEY:
@@ -76,6 +100,7 @@ def _chat(messages: list[dict[str, str]]) -> str:
                 headers=headers,
                 json={"model": settings.LLM_MODEL, "messages": messages},
                 timeout=settings.LLM_TIMEOUT_SECONDS,
+                trust_env=_trust_env_for_llm(),
             )
             response.raise_for_status()
             data = response.json()
@@ -121,6 +146,97 @@ def _llm_span(messages: list[dict[str, str]]):
         span_context.__exit__(None, None, None)
 
 
+# ── 解籤預熱 ────────────────────────────────────────────────────────────────
+# 本地 LLM 生成一份解籤實測要 ~21 秒，而使用者在抽到籤之後還要擲筊、看筊杯動畫、
+# 看領籤過場，這段時間原本整個空著。抽籤成功的那一刻籤詩就已經定了，解籤要的資料
+# （籤詩、問題、主題）全部到齊，唯一還沒確定的是擲筊結果——而後端規則是「一次聖筊
+# 即允准」，所以走到解籤的那條路上擲筊結果必然是 sheng。因此這裡在抽籤完成時就用
+# casts_override="sheng" 先把 LLM 跑起來，等使用者真的擲出聖筊呼叫 interpret 時，
+# 多半直接取用預熱結果，省掉整段等待。
+#
+# 預熱是純粹的加速手段：拿不到（換 worker、還沒跑完、擲筊擲很久導致逾時、或生成
+# 失敗）就照原本的路徑重新生成一次，行為與沒有預熱時完全相同。prompt 用的擲筊結果
+# 與正式路徑一致，所以 AIMessage 紀錄不會出現兩種版本。
+_PREWARM_MAX_WORKERS = int(os.getenv("INTERPRET_PREWARM_WORKERS", "2"))
+_PREWARM_KEEP = 64
+_prewarm_pool: ThreadPoolExecutor | None = None
+_prewarm_jobs: "OrderedDict[str, _PrewarmJob]" = OrderedDict()
+_prewarm_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class _PrewarmJob:
+    fortune_id: int
+    # 影響解籤內容的條件：換籤或改題目就不能再用這份預熱結果
+    signature: tuple
+    user_prompt: str
+    future: "Future[str]"
+
+
+def _prewarm_signature(session: DivinationSession) -> tuple:
+    return (session.fortune_id, session.question, tuple(session.categories or []), session.category)
+
+
+def _pool() -> ThreadPoolExecutor:
+    global _prewarm_pool
+    if _prewarm_pool is None:
+        _prewarm_pool = ThreadPoolExecutor(
+            max_workers=_PREWARM_MAX_WORKERS,
+            thread_name_prefix="interpret-prewarm",
+        )
+    return _prewarm_pool
+
+
+def prewarm_interpretation(session: DivinationSession) -> None:
+    """抽籤完成後呼叫：在背景先把這支籤的解籤生成出來。失敗一律吞掉。"""
+    if not settings.INTERPRET_PREWARM_ENABLED or not session.fortune_id:
+        return
+    key = str(session.session_uuid)
+    try:
+        system_prompt = _system_prompt(session)
+        user_prompt = _interpret_user_prompt(session, casts_override="sheng")
+    except Exception:  # 資料不全就別預熱，正式路徑會照樣報錯
+        return
+
+    signature = _prewarm_signature(session)
+    with _prewarm_lock:
+        existing = _prewarm_jobs.get(key)
+        # 同一支籤、同一個問題已經在跑（或跑完）就不重複送
+        if existing and existing.signature == signature:
+            return
+        while len(_prewarm_jobs) >= _PREWARM_KEEP:
+            _prewarm_jobs.popitem(last=False)
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        try:
+            future = _pool().submit(_chat, messages)
+        except RuntimeError:  # 程序正在關閉
+            return
+        # 沒人來取也不要在關站時噴 unraisable exception
+        future.add_done_callback(lambda done: done.exception() and None)
+        _prewarm_jobs[key] = _PrewarmJob(session.fortune_id, signature, user_prompt, future)
+
+
+def _take_prewarmed(session: DivinationSession) -> tuple[str, str] | None:
+    """取用預熱結果，回傳 (實際送出的 user prompt, 解籤內容)。
+
+    只有同一支籤、同一個問題才算命中；重抽籤或中途改題目都會落空，
+    落空就回 None 讓呼叫端照原路現場生成。
+    """
+    with _prewarm_lock:
+        job = _prewarm_jobs.get(str(session.session_uuid))
+        if not job or job.signature != _prewarm_signature(session):
+            return None
+        _prewarm_jobs.pop(str(session.session_uuid), None)
+    try:
+        # 已經在背景跑了一段時間，這裡最多再等滿原本的 LLM 逾時
+        content = job.future.result(timeout=settings.LLM_TIMEOUT_SECONDS)
+    except Exception:
+        return None
+    if not content or not content.strip():
+        return None
+    return job.user_prompt, content
+
+
 def interpret_session(session_uuid: str, request_data: dict | None = None) -> DivinationSession:
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status == "completed" and session.ai_interpretation:
@@ -160,10 +276,14 @@ def interpret_session(session_uuid: str, request_data: dict | None = None) -> Di
             session.save(update_fields=updated_fields)
 
     system_prompt = _system_prompt(session)
-    user_prompt = _interpret_user_prompt(session)
-
     try:
-        content = _chat([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}])
+        # 抽籤時就開始生成的那一份；沒有命中才現場跑一次
+        prewarmed = _take_prewarmed(session)
+        if prewarmed:
+            user_prompt, content = prewarmed
+        else:
+            user_prompt = _interpret_user_prompt(session)
+            content = _chat([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}])
     except Exception:
         # Release the claim so a subsequent retry isn't stuck in "interpreting" forever.
         DivinationSession.objects.filter(pk=session.pk, status="interpreting").update(

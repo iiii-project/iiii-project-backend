@@ -5,7 +5,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.ai_service.services import chat_about_session, interpret_session, list_session_messages
+from apps.ai_service.services import (
+    chat_about_session,
+    interpret_session,
+    list_session_messages,
+    prewarm_interpretation,
+)
 from config.utils import ok
 
 from .models import DivinationSession
@@ -40,6 +45,10 @@ class DivinationListCreateView(APIView):
             **serializer.validated_data,
             user=request.user if request.user.is_authenticated else None,
         )
+        # 查籤（帶 fortune_number 建立）一開始就把籤釘好、狀態直接是 confirmed，
+        # 下一步一定是解籤，所以在這裡就先預熱，跟抽籤那條路一樣不必乾等。
+        if session.fortune_id and session.confirmed:
+            prewarm_interpretation(session)
         return Response(ok(DivinationSessionSerializer(session).data), status=201)
 
 
@@ -50,6 +59,9 @@ class DivinationDetailView(APIView):
         session = get_object_or_404(
             DivinationSession.objects.select_related("fortune_set", "fortune"), session_uuid=session_id
         )
+        share_token = request.query_params.get("share")
+        if share_token and str(session.share_token) == share_token:
+            return session
         if session.user_id:
             if not request.user.is_authenticated:
                 raise PermissionDenied("請登入後再查看此求籤紀錄")
@@ -80,6 +92,8 @@ class DrawFortuneView(APIView):
     def post(self, request, session_id):
         DivinationDetailView().get_object(request, session_id)
         session = draw_fortune(session_id)
+        # 籤一抽出來就開始生成解籤，等使用者擲完筊多半已經備好
+        prewarm_interpretation(session)
         return Response(ok(DivinationSessionSerializer(session).data))
 class BlockCastView(APIView):
     permission_classes = [AllowAny]
