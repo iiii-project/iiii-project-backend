@@ -1,4 +1,23 @@
 services:
+  llama:
+    build: ./llamacpp
+    restart: unless-stopped
+    environment:
+      LLAMA_HOST: 0.0.0.0
+      LLAMA_PORT: 1234
+      LLAMA_MODEL: ${LLAMA_MODEL:-}
+      LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-local-model}
+    ports:
+      - "${LLAMA_HOST_PORT:-1234}:1234"
+    volumes:
+      - ./llamacpp:/llamacpp:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:1234/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
   web:
     build: .
     restart: unless-stopped
@@ -7,6 +26,11 @@ services:
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-1234}
+      LLM_BASE_URL: http://llama:1234/v1
+      LLM_MODEL: ${LLAMA_MODEL_ALIAS:-local-model}
+    depends_on:
+      llama:
+        condition: service_healthy
     ports:
       - "${DJANGO_PORT:-8000}:8000"
     volumes:

@@ -47,3 +47,5 @@ docker compose up -d --build
 ```
 
 The API is available at `http://localhost:8000/api/v1/`. SQLite data and uploads are stored in Docker volumes. The first start creates `admin` with password `1234`; override `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and `DJANGO_SUPERUSER_PASSWORD` before production use. Set `DJANGO_PORT` to expose a different host port.
+
+Compose also starts llama.cpp. Place GGUF files in `llamacpp/model/`; the first compatible model is selected automatically. Set `LLAMA_MODEL` to a model filename or its numbered position in the sorted list to select one explicitly. The backend connects to it at `http://llama:1234/v1`.

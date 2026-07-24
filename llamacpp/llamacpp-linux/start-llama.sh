@@ -3,11 +3,11 @@ set -u
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-SERVER="$SCRIPT_DIR/llama-b9873/llama-server"
-MODEL_DIR="/mnt/jimmy/models"
+SERVER="${LLAMA_SERVER:-$SCRIPT_DIR/llama-server}"
+MODEL_DIR="$SCRIPT_DIR/../model"
 
-HOST="127.0.0.1"
-PORT="1234"
+HOST="${LLAMA_HOST:-127.0.0.1}"
+PORT="${LLAMA_PORT:-1234}"
 
 # 你的硬體建議值：
 # 8192 總 context ÷ 2 個平行 slot ≈ 每個請求 4096
@@ -21,7 +21,9 @@ UBATCH_SIZE="256"
 pause_and_exit() {
     local exit_code="${1:-1}"
     echo
-    read -rp "按 Enter 關閉..."
+    if [ -t 0 ]; then
+        read -rp "按 Enter 關閉..."
+    fi
     exit "$exit_code"
 }
 
@@ -89,40 +91,31 @@ if [ "${#MODELS[@]}" -eq 0 ]; then
     pause_and_exit 1
 fi
 
-# ---------- 模型選單 ----------
+# ---------- 自動選擇模型 ----------
 
-echo "請選擇要啟動的模型："
-echo
+MODEL=""
+if [ -z "${LLAMA_MODEL:-}" ]; then
+    MODEL="${MODELS[0]}"
+elif [[ "$LLAMA_MODEL" =~ ^[0-9]+$ ]] && [ "$LLAMA_MODEL" -gt 0 ] && [ "$LLAMA_MODEL" -le "${#MODELS[@]}" ]; then
+    MODEL="${MODELS[$((LLAMA_MODEL - 1))]}"
+else
+    for candidate in "${MODELS[@]}"; do
+        if [ "$candidate" = "$LLAMA_MODEL" ] || [ "$(basename "$candidate")" = "$LLAMA_MODEL" ]; then
+            MODEL="$candidate"
+            break
+        fi
+    done
+fi
 
-for i in "${!MODELS[@]}"; do
-    MODEL_SIZE="$(du -h "${MODELS[$i]}" | cut -f1)"
-
-    printf '%2d) %-60s [%s]\n' \
-        "$((i + 1))" \
-        "$(basename "${MODELS[$i]}")" \
-        "$MODEL_SIZE"
-done
-
-echo
-read -rp "輸入編號： " CHOICE
-
-if ! [[ "$CHOICE" =~ ^[0-9]+$ ]]; then
-    echo "請輸入有效的數字。"
+if [ -z "$MODEL" ]; then
+    echo "找不到指定的模型：${LLAMA_MODEL:-}"
     pause_and_exit 1
 fi
 
-INDEX=$((CHOICE - 1))
-
-if [ "$INDEX" -lt 0 ] || [ "$INDEX" -ge "${#MODELS[@]}" ]; then
-    echo "沒有這個模型編號。"
-    pause_and_exit 1
-fi
-
-MODEL="${MODELS[$INDEX]}"
 MODEL_FOLDER="$(dirname "$MODEL")"
 MODEL_FILENAME="$(basename "$MODEL")"
 
-ALIAS="${MODEL_FILENAME%.gguf}"
+ALIAS="${LLAMA_MODEL_ALIAS:-${MODEL_FILENAME%.gguf}}"
 
 # 多分片模型的 API 名稱移除片號
 ALIAS="$(printf '%s' "$ALIAS" |
