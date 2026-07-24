@@ -14,7 +14,20 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - "sed -i 's/\\r$//' /llamacpp/llamacpp-linux/start-llama.sh && exec bash /llamacpp/llamacpp-linux/start-llama.sh"
+      - >-
+        cd /llamacpp/llamacpp-linux &&
+        ln -sf libggml-base.so.0 libggml-base.so &&
+        ln -sf libggml-base.so.0.15.3 libggml-base.so.0 &&
+        ln -sf libggml.so.0 libggml.so &&
+        ln -sf libggml.so.0.15.3 libggml.so.0 &&
+        ln -sf libllama-common.so.0 libllama-common.so &&
+        ln -sf libllama-common.so.0.0.9873 libllama-common.so.0 &&
+        ln -sf libllama.so.0 libllama.so &&
+        ln -sf libllama.so.0.0.9873 libllama.so.0 &&
+        ln -sf libmtmd.so.0 libmtmd.so &&
+        ln -sf libmtmd.so.0.0.9873 libmtmd.so.0 &&
+        sed -i 's/\r$//' start-llama.sh &&
+        exec bash start-llama.sh
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:1234/health"]
       interval: 30s
