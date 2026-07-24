@@ -12,6 +12,7 @@ dependencies = [
     "httpx>=0.28",
     "opik>=1.8",
     "python-dotenv>=1.1",
+    "whitenoise>=6.9",
 ]
 
 [dependency-groups]

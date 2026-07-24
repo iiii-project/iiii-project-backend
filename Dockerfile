@@ -11,6 +11,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 RUN uv sync --frozen --no-dev
+RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
