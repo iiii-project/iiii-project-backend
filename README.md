@@ -46,4 +46,4 @@ Set production values in `.env`, especially `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=F
 docker compose up -d --build
 ```
 
-The API is available at `http://localhost:8000/api/v1/`. SQLite data and uploads are stored in Docker volumes. Set `DJANGO_PORT` to expose a different host port.
+The API is available at `http://localhost:8000/api/v1/`. SQLite data and uploads are stored in Docker volumes. The first start creates `admin` with password `1234`; override `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and `DJANGO_SUPERUSER_PASSWORD` before production use. Set `DJANGO_PORT` to expose a different host port.
