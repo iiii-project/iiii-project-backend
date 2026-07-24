@@ -37,3 +37,13 @@ LLM_TIMEOUT_SECONDS=20
 ```bash
 uv run pytest
 ```
+
+## Docker Compose
+
+Set production values in `.env`, especially `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS`, then run:
+
+```bash
+docker compose up -d --build
+```
+
+The API is available at `http://localhost:8000/api/v1/`. SQLite data and uploads are stored in Docker volumes. Set `DJANGO_PORT` to expose a different host port.

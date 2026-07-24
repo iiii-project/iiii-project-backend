@@ -43,6 +43,26 @@ Authorization: Bearer <access_token>
 
 ## 認證
 
+## 管理員籤詩批次匯入
+
+`POST /admin/fortune-sets/{fortune_set_code}/fortunes/import/`
+
+需使用管理員帳號的 JWT。請求中的 `items` 會依 `number` 建立或更新籤詩；整批資料會在同一個 transaction 中寫入。
+
+```json
+{
+  "items": [
+    {
+      "number": 1,
+      "title": "第一籤",
+      "poem": "籤詩內容",
+      "translation": "白話解釋",
+      "fortune_level": "上吉"
+    }
+  ]
+}
+```
+
 ### 註冊
 
 `POST /auth/register/`

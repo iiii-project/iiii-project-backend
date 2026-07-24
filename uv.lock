@@ -12,6 +12,7 @@ dependencies = [
     { name = "django-filter" },
     { name = "djangorestframework" },
     { name = "djangorestframework-simplejwt" },
+    { name = "gunicorn" },
     { name = "httpx" },
     { name = "opik" },
     { name = "python-dotenv" },
@@ -30,6 +31,7 @@ requires-dist = [
     { name = "django-filter", specifier = ">=25.1" },
     { name = "djangorestframework", specifier = ">=3.16" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.5" },
+    { name = "gunicorn", specifier = ">=23.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "opik", specifier = ">=1.8" },
     { name = "python-dotenv", specifier = ">=1.1" },
@@ -544,6 +546,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/10/a1/ae4e3e5003468d6391d2c77b6fa1cd73bd5d13511d81c642d7b28ac90ed4/fsspec-2026.6.0.tar.gz", hash = "sha256:f5bac145310fe30e16e1471bd6840b2d990d609e872251d7e674241822abf01a", size = 313646, upload-time = "2026-06-16T01:57:28.105Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/22/4222d7ddf3da30f363edaa98e329c2bce6c65497c9cb2810931c8b2c0fbc/fsspec-2026.6.0-py3-none-any.whl", hash = "sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1", size = 203949, upload-time = "2026-06-16T01:57:26.358Z" },
+]
+
+[[package]]
+name = "gunicorn"
+version = "26.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/b7/a4a3f632f823e432ce6bc65f62961b7980c898c77f075a2f7118cb3846fe/gunicorn-26.0.0.tar.gz", hash = "sha256:ca9346f85e3a4aeeb64d491045c16b9a35647abd37ea15efe53080eb8b090baf", size = 727286, upload-time = "2026-05-05T06:38:25.529Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/40/9c2384fc2be4ad25dd4a49decd5ad9ea5a3639814c11bd40ab77cb9f0a14/gunicorn-26.0.0-py3-none-any.whl", hash = "sha256:40233d26a5f0d1872916188c276e21641155111c2853f0c2cd55260aec0d24fc", size = 212009, upload-time = "2026-05-05T06:38:23.007Z" },
 ]
 
 [[package]]

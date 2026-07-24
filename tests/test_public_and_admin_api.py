@@ -72,3 +72,32 @@ def test_usage_stats_returns_session_counts():
     assert response.data["data"]["total_sessions"] == 1
     assert response.data["data"]["completed_sessions"] == 1
     assert response.data["data"]["by_category"] == [{"category": "career", "count": 1}]
+
+
+@pytest.mark.django_db
+def test_admin_can_import_and_update_fortunes():
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    admin = User.objects.create_superuser("admin", "admin@example.com", "pass")
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    response = client.post(
+        f"/api/v1/admin/fortune-sets/{fortune_set.code}/fortunes/import/",
+        {"items": [{"number": 1, "poem": "新籤詩", "title": "第一籤"}]},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.data["data"] == {"imported": 1}
+    assert Fortune.objects.get(fortune_set=fortune_set, number=1).poem == "新籤詩"
+
+
+@pytest.mark.django_db
+def test_fortune_import_requires_admin():
+    response = APIClient().post(
+        "/api/v1/admin/fortune-sets/SIXTY_JIAZI/fortunes/import/",
+        {"items": [{"number": 1, "poem": "籤詩"}]},
+        format="json",
+    )
+
+    assert response.status_code in {401, 403}
