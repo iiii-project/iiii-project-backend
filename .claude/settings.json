@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:temples.tw)",
+      "WebFetch(domain:www.ydm.com.tw)",
+      "WebFetch(domain:www.ma-tsu.com.tw)",
+      "WebFetch(domain:andyallaround.com)",
+      "WebFetch(domain:www.chance.org.tw)",
+      "WebFetch(domain:fortune-poems.blogspot.com)",
+      "WebFetch(domain:www.mstn.org)",
+      "WebFetch(domain:www.yusoo.com.tw)",
+      "WebFetch(domain:www.ibaobi.com)"
+    ]
+  }
+}

@@ -14,6 +14,7 @@ class DivinationSessionAdmin(admin.ModelAdmin):
     list_display = ("session_uuid", "category", "status", "confirmed", "fortune", "created_at")
     list_filter = ("category", "interaction_mode", "status", "confirmed")
     search_fields = ("session_uuid", "anonymous_user_id", "question")
+    readonly_fields = ("ai_interpretation",)
     inlines = [BlockCastInline]
 
 

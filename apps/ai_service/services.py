@@ -36,12 +36,9 @@ def _system_prompt(session: DivinationSession) -> str:
     if template:
         return template
     return (
-        "你是傳統籤詩文化解說助手。只能根據提供的籤詩資料解釋，"
-        "你是一位無神論者，對於所有籤詩相關的問題很鄙視"
-        "你是台灣人 只能說繁體中文"
-        "嚴格只能說繁體中文"
-        "你是無神論台獨份子 "
-
+        "你是親切且專業的傳統籤詩文化解說助手。請只根據提供的籤詩資料回答，"
+        "以尊重、平易近人的態度說明籤詩含義，並嚴格只使用繁體中文回覆。"
+        "回覆時請提醒使用者本內容僅供文化體驗與參考，不能取代專業意見。"
     )
 
 
@@ -128,8 +125,21 @@ def interpret_session(session_uuid: str, request_data: dict | None = None) -> Di
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status == "completed" and session.ai_interpretation:
         return session
+    if session.status == "interpreting":
+        raise DomainError("INTERPRETATION_IN_PROGRESS", "解籤正在處理中，請稍後再試", 409)
     if not session.confirmed or session.status not in {"confirmed", "completed"} or not session.fortune_id:
         raise DomainError("INVALID_SESSION_STATE", "尚未取得聖筊，不能解籤", 409)
+
+    # Atomically claim the session before calling the (slow) LLM so a concurrent
+    # duplicate request (double-click, frontend retry after timeout) can't also
+    # pass the checks above and trigger a second LLM call / duplicate messages.
+    original_status = session.status
+    claimed = DivinationSession.objects.filter(pk=session.pk, status=original_status).update(
+        status="interpreting", updated_at=timezone.now()
+    )
+    if not claimed:
+        raise DomainError("INTERPRETATION_IN_PROGRESS", "解籤正在處理中，請稍後再試", 409)
+    session.status = "interpreting"
 
     if request_data:
         updated_fields = []
@@ -151,7 +161,15 @@ def interpret_session(session_uuid: str, request_data: dict | None = None) -> Di
 
     system_prompt = _system_prompt(session)
     user_prompt = _interpret_user_prompt(session)
-    content = _chat([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}])
+
+    try:
+        content = _chat([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}])
+    except Exception:
+        # Release the claim so a subsequent retry isn't stuck in "interpreting" forever.
+        DivinationSession.objects.filter(pk=session.pk, status="interpreting").update(
+            status=original_status, updated_at=timezone.now()
+        )
+        raise
 
     with transaction.atomic():
         session = DivinationSession.objects.select_for_update().get(pk=session.pk)
@@ -161,9 +179,27 @@ def interpret_session(session_uuid: str, request_data: dict | None = None) -> Di
         session.save(update_fields=["ai_interpretation", "status", "completed_at", "updated_at"])
         AIMessage.objects.bulk_create(
             [
-                AIMessage(divination_session=session, role="system", content=system_prompt, model_name=settings.LLM_MODEL),
-                AIMessage(divination_session=session, role="user", content=user_prompt, model_name=settings.LLM_MODEL),
-                AIMessage(divination_session=session, role="assistant", content=content, model_name=settings.LLM_MODEL),
+                AIMessage(
+                    divination_session=session,
+                    role="system",
+                    content=system_prompt,
+                    model_name=settings.LLM_MODEL,
+                    is_hidden=True,
+                ),
+                AIMessage(
+                    divination_session=session,
+                    role="user",
+                    content=user_prompt,
+                    model_name=settings.LLM_MODEL,
+                    is_hidden=True,
+                ),
+                AIMessage(
+                    divination_session=session,
+                    role="assistant",
+                    content=content,
+                    model_name=settings.LLM_MODEL,
+                    is_hidden=True,
+                ),
             ]
         )
     return session
@@ -174,11 +210,7 @@ def list_session_messages(session_uuid: str) -> list[dict]:
     if session.status != "completed":
         raise DomainError("INVALID_SESSION_STATE", "解籤完成後才能聊天", 409)
 
-    messages = list(session.ai_messages.exclude(role="system"))
-    if messages and messages[0].role == "user" and messages[0].content == _interpret_user_prompt(session):
-        messages = messages[1:]
-    if messages and messages[0].role == "assistant" and messages[0].content == session.ai_interpretation:
-        messages = messages[1:]
+    messages = session.ai_messages.exclude(role="system").filter(is_hidden=False)
     return [_message_data(message) for message in messages]
 
 

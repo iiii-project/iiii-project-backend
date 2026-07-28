@@ -29,7 +29,7 @@ def create_session(
     user=None,
 ):
     try:
-        fortune_set = FortuneSet.objects.get(code=fortune_set_code, is_active=True)
+        fortune_set = FortuneSet.objects.get(code=fortune_set_code, is_active=True, is_public=True)
     except FortuneSet.DoesNotExist as exc:
         raise DomainError("FORTUNE_SET_NOT_FOUND", "找不到可用籤系", 404) from exc
 

@@ -17,6 +17,11 @@ class FortuneSet(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.code})"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            FortuneSet.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+
 
 class Fortune(models.Model):
     fortune_set = models.ForeignKey(FortuneSet, on_delete=models.CASCADE, related_name="fortunes")

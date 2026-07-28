@@ -11,6 +11,9 @@ class AIMessage(models.Model):
     content = models.TextField()
     model_name = models.CharField(max_length=100, blank=True)
     token_count = models.PositiveIntegerField(null=True, blank=True)
+    is_hidden = models.BooleanField(
+        default=False, help_text="True for the initial interpret prompt/reply, hidden from chat history."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

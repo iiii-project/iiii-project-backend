@@ -18,13 +18,6 @@ from .serializers import (
 from .services import cast_blocks, complete_prayer, create_session, draw_fortune
 
 
-def _print_divination_debug(label: str, payload: dict) -> None:
-    print(f"\n=== {label} ===")
-    for key, value in payload.items():
-        print(f"{key}: {value}")
-    print("=== END ===\n")
-
-
 class DivinationListCreateView(APIView):
     permission_classes = [AllowAny]
 
@@ -42,16 +35,6 @@ class DivinationListCreateView(APIView):
     def post(self, request):
         serializer = DivinationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        _print_divination_debug(
-            "DIVINATION CREATE RECEIVED",
-            {
-                "question": serializer.validated_data.get("question"),
-                "category": serializer.validated_data.get("category"),
-                "categories": serializer.validated_data.get("categories"),
-                "interaction_mode": serializer.validated_data.get("interaction_mode"),
-                "anonymous_user_id": serializer.validated_data.get("anonymous_user_id"),
-            },
-        )
         session = create_session(
             **serializer.validated_data,
             user=request.user if request.user.is_authenticated else None,
@@ -113,16 +96,6 @@ class InterpretView(APIView):
         DivinationDetailView().get_object(request, session_id)
         serializer = InterpretRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        _print_divination_debug(
-            "DIVINATION INTERPRET RECEIVED",
-            {
-                "session_id": session_id,
-                "question": serializer.validated_data.get("question"),
-                "category": serializer.validated_data.get("category"),
-                "categories": serializer.validated_data.get("categories"),
-                "divination_result": serializer.validated_data.get("divination_result"),
-            },
-        )
         session = interpret_session(session_id, serializer.validated_data)
         return Response(ok(DivinationSessionSerializer(session).data))
 
@@ -137,12 +110,5 @@ class ChatView(APIView):
         DivinationDetailView().get_object(request, session_id)
         serializer = ChatSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        _print_divination_debug(
-            "DIVINATION CHAT RECEIVED",
-            {
-                "session_id": session_id,
-                "message": serializer.validated_data["message"],
-            },
-        )
         reply = chat_about_session(session_id, serializer.validated_data["message"])
         return Response(ok({"reply": reply, "remaining_messages": None}))

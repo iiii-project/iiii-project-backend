@@ -3,7 +3,14 @@ from django.db import IntegrityError
 
 from apps.divinations.models import DivinationSession
 from apps.divinations.serializers import BlockCastSerializer
-from apps.divinations.services import block_result, cast_blocks, complete_prayer, create_session, draw_fortune
+from apps.divinations.services import (
+    DomainError,
+    block_result,
+    cast_blocks,
+    complete_prayer,
+    create_session,
+    draw_fortune,
+)
 from apps.fortunes.models import Fortune, FortuneSet
 
 
@@ -121,3 +128,33 @@ def test_create_session_accepts_fortune_number(fortune_set):
     assert session.fortune_id == fortune.id
     assert session.status == "confirmed"
     assert session.confirmed is True
+
+
+@pytest.mark.django_db
+def test_create_session_rejects_non_public_fortune_set():
+    private_set = FortuneSet.objects.create(
+        code="PRIVATE_SET", name="未公開籤系", is_active=True, is_public=False
+    )
+
+    with pytest.raises(DomainError) as exc_info:
+        create_session(
+            fortune_set_code=private_set.code,
+            question="最近適合換工作嗎？",
+            category="career",
+            interaction_mode="click",
+            anonymous_user_id="guest",
+        )
+
+    assert exc_info.value.default_code == "FORTUNE_SET_NOT_FOUND"
+
+
+@pytest.mark.django_db
+def test_fortune_set_is_default_is_unique(fortune_set):
+    other_set = FortuneSet.objects.create(
+        code="OTHER_SET", name="其他籤系", is_active=True, is_public=True, is_default=True
+    )
+
+    fortune_set.refresh_from_db()
+    assert fortune_set.is_default is False
+    assert other_set.is_default is True
+    assert FortuneSet.objects.filter(is_default=True).count() == 1

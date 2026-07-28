@@ -6,8 +6,13 @@ from apps.fortunes.serializers import FortuneSerializer, FortuneSetSerializer
 from .models import BlockCast, DivinationSession
 
 
+def _default_fortune_set_code() -> str:
+    default_set = FortuneSet.objects.filter(is_default=True, is_active=True).first()
+    return default_set.code if default_set else "SIXTY_JIAZI"
+
+
 class DivinationCreateSerializer(serializers.Serializer):
-    fortune_set_code = serializers.CharField(max_length=50, default="SIXTY_JIAZI")
+    fortune_set_code = serializers.CharField(max_length=50, default=_default_fortune_set_code)
     question = serializers.CharField(min_length=2, max_length=300)
     categories = serializers.ListField(
         child=serializers.ChoiceField(choices=DivinationSession.CATEGORY_CHOICES),
@@ -19,7 +24,7 @@ class DivinationCreateSerializer(serializers.Serializer):
     fortune_number = serializers.IntegerField(min_value=1, required=False)
 
     def validate_fortune_set_code(self, value):
-        if not FortuneSet.objects.filter(code=value, is_active=True).exists():
+        if not FortuneSet.objects.filter(code=value, is_active=True, is_public=True).exists():
             raise serializers.ValidationError("找不到可用籤系")
         return value
 

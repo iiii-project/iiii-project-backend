@@ -10,6 +10,7 @@ from apps.ai_service.services import (
     list_session_messages,
 )
 from apps.divinations.models import DivinationSession
+from apps.divinations.services import DomainError
 from apps.fortunes.models import Fortune, FortuneSet
 
 
@@ -155,6 +156,61 @@ def test_interpret_retries_completed_session_without_interpretation(monkeypatch)
 
 
 @pytest.mark.django_db
+def test_interpret_rejects_concurrent_call_already_in_progress(monkeypatch):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=5, poem="詩")
+    session = DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question="測試",
+        category="career",
+        interaction_mode="click",
+        status="interpreting",
+        confirmed=True,
+    )
+    calls = []
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: calls.append(messages) or "不應呼叫")
+
+    with pytest.raises(DomainError) as exc_info:
+        interpret_session(session.session_uuid)
+
+    assert exc_info.value.default_code == "INTERPRETATION_IN_PROGRESS"
+    assert calls == []
+
+
+@pytest.mark.django_db
+def test_interpret_releases_claim_when_llm_call_fails(monkeypatch):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=6, poem="詩")
+    session = DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question="測試",
+        category="career",
+        interaction_mode="click",
+        status="confirmed",
+        confirmed=True,
+    )
+
+    def failing_chat(messages):
+        raise DomainError("AI_SERVICE_UNAVAILABLE", "AI 暫時無法使用，請稍後再試", 503)
+
+    monkeypatch.setattr("apps.ai_service.services._chat", failing_chat)
+
+    with pytest.raises(DomainError):
+        interpret_session(session.session_uuid)
+
+    session.refresh_from_db()
+    assert session.status == "confirmed"
+
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "重試成功")
+    result = interpret_session(session.session_uuid)
+
+    assert result.status == "completed"
+    assert result.ai_interpretation == "重試成功"
+
+
+@pytest.mark.django_db
 def test_chat_keeps_context_and_returns_display_messages(monkeypatch):
     fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
     fortune = Fortune.objects.create(fortune_set=fortune_set, number=2, poem="詩")
@@ -168,16 +224,15 @@ def test_chat_keeps_context_and_returns_display_messages(monkeypatch):
         confirmed=True,
         ai_interpretation="初始解籤",
     )
-    AIMessage.objects.create(divination_session=session, role="system", content="系統")
-    AIMessage.objects.create(divination_session=session, role="user", content="隱藏解籤 prompt")
-    AIMessage.objects.create(divination_session=session, role="assistant", content="初始解籤")
+    AIMessage.objects.create(divination_session=session, role="system", content="系統", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="user", content="隱藏解籤 prompt", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="assistant", content="初始解籤", is_hidden=True)
     calls = []
 
     def fake_chat(messages):
         calls.append(messages)
         return "可以先盤點履歷"
 
-    monkeypatch.setattr("apps.ai_service.services._interpret_user_prompt", lambda session: "隱藏解籤 prompt")
     monkeypatch.setattr("apps.ai_service.services._chat", fake_chat)
 
     data = chat_about_session(session.session_uuid, "我該怎麼準備？")
@@ -190,7 +245,7 @@ def test_chat_keeps_context_and_returns_display_messages(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_list_session_messages_hides_initial_interpretation_prompt(monkeypatch):
+def test_list_session_messages_hides_initial_interpretation_prompt():
     fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
     fortune = Fortune.objects.create(fortune_set=fortune_set, number=3, poem="詩")
     session = DivinationSession.objects.create(
@@ -203,11 +258,10 @@ def test_list_session_messages_hides_initial_interpretation_prompt(monkeypatch):
         confirmed=True,
         ai_interpretation="初始解籤",
     )
-    AIMessage.objects.create(divination_session=session, role="system", content="系統")
-    AIMessage.objects.create(divination_session=session, role="user", content="隱藏解籤 prompt")
-    AIMessage.objects.create(divination_session=session, role="assistant", content="初始解籤")
+    AIMessage.objects.create(divination_session=session, role="system", content="系統", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="user", content="隱藏解籤 prompt", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="assistant", content="初始解籤", is_hidden=True)
     AIMessage.objects.create(divination_session=session, role="user", content="追問")
-    monkeypatch.setattr("apps.ai_service.services._interpret_user_prompt", lambda session: "隱藏解籤 prompt")
 
     messages = list_session_messages(session.session_uuid)
 
