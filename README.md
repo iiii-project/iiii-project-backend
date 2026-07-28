@@ -37,8 +37,16 @@ LLM_TIMEOUT_SECONDS=20
 ## Checks
 
 ```bash
-uv run pytest
+uv run python -m pytest
 ```
+
+With coverage report:
+
+```bash
+uv run python -m pytest --cov=apps --cov=config --cov-report=term-missing
+```
+
+CI (`.github/workflows/ci.yml`) runs this test suite with coverage, plus a `makemigrations --check` guard, on every push/PR to `main`.
 
 ## Docker Compose
 

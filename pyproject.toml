@@ -19,8 +19,16 @@ dependencies = [
 dev = [
     "pytest>=8.4",
     "pytest-django>=4.11",
+    "pytest-cov>=6.0",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["apps", "config"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover"]

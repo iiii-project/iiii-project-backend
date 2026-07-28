@@ -44,3 +44,34 @@ def test_register_returns_jwt_and_authenticated_history_is_owner_scoped():
     history = client.get("/api/v1/divinations/")
     items = history.json()["data"]["items"]
     assert [item["session_id"] for item in items] == [str(own_session.session_uuid)]
+
+
+@pytest.mark.django_db
+def test_register_rejects_duplicate_username():
+    get_user_model().objects.create_user(username="temple-user", password="A-strong-password-123")
+
+    response = APIClient().post(
+        "/api/v1/auth/register/",
+        {"username": "temple-user", "email": "dup@example.com", "password": "Another-strong-pass-1"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_register_rejects_weak_password():
+    response = APIClient().post(
+        "/api/v1/auth/register/",
+        {"username": "new-user", "email": "new@example.com", "password": "12345678"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert not get_user_model().objects.filter(username="new-user").exists()
+
+
+def test_me_requires_authentication():
+    response = APIClient().get("/api/v1/auth/me/")
+
+    assert response.status_code == 401
