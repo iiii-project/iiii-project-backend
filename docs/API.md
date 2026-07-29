@@ -63,7 +63,7 @@ Authorization: Bearer <access_token>
 | `INVALID` | 400 | 請求欄位驗證失敗（必填欄位缺漏、格式錯誤、選項不合法等） |
 | `NOT_AUTHENTICATED` | 401 | 需要登入的端點未帶有效 JWT |
 | `PERMISSION_DENIED` | 403 | 已登入但權限不足（非管理員呼叫管理端點），或未登入卻嘗試存取綁定他人帳號的求籤紀錄 |
-| `NOT_FOUND` | 404 | 已登入但查詢/操作的求籤紀錄綁定的是其他使用者 |
+| `NOT_FOUND` | 404 | 已登入但查詢/操作的求籤紀錄綁定的是其他使用者；`GET /divinations/{session_id}/chat/` 與 `POST /divinations/{session_id}/claim/` 另外也用此碼統一表示「不屬於本人／不存在／非匿名紀錄」這幾種情況，刻意不區分 |
 | `FORTUNE_SET_NOT_FOUND` | 404 | 指定的 `fortune_set_code` 不存在，或該籤系目前非啟用中／非公開 |
 | `FORTUNE_NOT_FOUND` | 404 | 指定的 `fortune_number` 在該籤系中找不到啟用中的籤詩 |
 | `FORTUNE_DATA_UNAVAILABLE` | 409 | 該籤系目前沒有任何啟用中的籤詩可供抽籤 |
@@ -308,11 +308,85 @@ Authorization: Bearer <access_token>
 - 若 AI 服務呼叫失敗（逾時、連線錯誤、回傳空白），回傳 `503 AI_SERVICE_UNAVAILABLE`，紀錄狀態會還原成呼叫前的狀態，可以直接重新呼叫本端點重試。
 - 成功後回傳更新後的求籤紀錄，`status` 為 `completed`。
 
+### 認領匿名紀錄
+
+`POST /divinations/{session_id}/claim/`
+
+需要 JWT，無 request body。用途：使用者先以匿名方式（例如掃 QR Code）完成解籤，事後登入時將該筆匿名紀錄綁定到自己的帳號，才能使用上面「AI 對話」的 `GET` 端點讀回對話紀錄。
+
+- 僅可認領 `user` 為 `null` 的匿名紀錄；`session_id` 本身就是匿名流程的持有憑證，不另外檢查 `anonymous_user_id`。
+- 認領成功時，將 `user` 設為目前 JWT 對應的使用者，並將 `anonymous_user_id` 清空。
+- 若紀錄已經是目前使用者本人所擁有，直接回傳成功與目前紀錄，不重複寫入，前端可安全重試。
+- 若 `session_id` 不存在、已綁定其他使用者、或已不是匿名紀錄（例如登入時直接建立），一律回傳相同的 `404 NOT_FOUND`，避免洩漏紀錄是否存在或其擁有權：
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "NOT_FOUND",
+      "message": "找不到這次求籤紀錄",
+      "details": { "detail": "找不到這次求籤紀錄" }
+    }
+  }
+  ```
+- 不限制紀錄的 `status`；認領本身與解籤流程進度無關。
+- 認領在資料庫 transaction 中鎖定該筆紀錄後才寫入，避免兩個帳號同時認領同一筆匿名紀錄。
+
+成功回傳 `200`，`data` 為認領後的求籤紀錄（格式同「求籤紀錄格式」）：
+
+```json
+{
+  "success": true,
+  "data": {
+    "session_id": "6b3e1cd9-ba83-4da3-93cc-16a0aa4e7a4d",
+    "user": 1,
+    "anonymous_user_id": "",
+    "fortune_set": { "code": "SIXTY_JIAZI", "name": "六十甲子籤", "description": "...", "is_default": true },
+    "fortune": {},
+    "question": "今年轉職是否合適？",
+    "categories": ["career"],
+    "interaction_mode": "click",
+    "status": "completed",
+    "confirmed": true,
+    "interpretation": {},
+    "ai_interpretation": "...",
+    "created_at": "2026-07-14T00:00:00Z",
+    "updated_at": "2026-07-14T00:05:00Z",
+    "completed_at": "2026-07-14T00:04:00Z"
+  },
+  "message": "操作成功"
+}
+```
+
 ### AI 對話
 
 `GET /divinations/{session_id}/chat/`
 
-僅限已完成解籤（`status: "completed"`）的紀錄，否則回傳 `409 INVALID_SESSION_STATE`。回傳目前的對話紀錄（不含解籤當下產生、對使用者隱藏的初始 prompt 與回覆）：
+**需要 JWT，且僅回傳登入使用者本人擁有的紀錄**（STORY-003 起生效；`user` 欄位由建立 session 當下的 JWT 決定，之後才登入不會回溯取得擁有權）：
+
+- 未帶或帶無效 JWT：回傳 `401 NOT_AUTHENTICATED`。
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "NOT_AUTHENTICATED",
+      "message": "Authentication credentials were not provided.",
+      "details": { "detail": "Authentication credentials were not provided." }
+    }
+  }
+  ```
+- 已登入但 `session_id` 不屬於目前使用者、或該 `session_id` 根本不存在、或該紀錄是匿名建立（沒有綁定任何使用者）：一律回傳 `404 NOT_FOUND`，**回應內容與狀態碼在這三種情況下逐字元完全相同**，不會透露 `session_id` 是否存在：
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "NOT_FOUND",
+      "message": "找不到這次求籤紀錄",
+      "details": { "detail": "找不到這次求籤紀錄" }
+    }
+  }
+  ```
+- 已登入且是本人擁有的紀錄，但尚未完成解籤：回傳 `409 INVALID_SESSION_STATE`（此情況已透過擁有權驗證，不受上面的匿名化規則限制）。
+- 已登入、是本人擁有、且已完成解籤：回傳 `200`，內容為目前的對話紀錄（不含解籤當下產生、對使用者隱藏的初始 prompt 與回覆）：
 
 ```json
 {
@@ -328,7 +402,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-> ⚠️ 此端點目前**不會**檢查求籤紀錄的擁有權（與本文件其餘端點的行為不同）：只要知道 `session_id`，任何人都可以讀取該次對話紀錄，即使該紀錄綁定了其他使用者。這是已知、尚待修復的限制，請勿將 `session_id` 視為機密資訊以外的憑證使用。
+> 注意：因為此端點現在要求登入，**匿名建立的求籤紀錄無法透過 GET 讀回對話紀錄**，即使是該紀錄的原始建立者也一樣（沒有登入就沒有「本人」可言）。匿名流程仍可透過下方的 `POST` 端點取得單次回覆內容（回覆會包含在 POST 的回應裡），只是不能事後用 GET 重新查閱完整對話。
 
 `POST /divinations/{session_id}/chat/`
 
@@ -357,6 +431,8 @@ Authorization: Bearer <access_token>
 ### 標準流程
 
 建立紀錄 → 完成祈求 → 抽籤 → 擲筊直到擲出聖筊（未中則重新抽籤） → AI 解籤 → AI 對話。若建立時直接帶 `fortune_number`，則會跳過「完成祈求 → 抽籤 → 擲筊」直接進入已確認狀態。
+
+若求籤是匿名建立的（QR Code 流程），使用者想私人追問時需先登入，再呼叫「認領匿名紀錄」將該筆紀錄綁定到帳號，才能使用 `GET /divinations/{session_id}/chat/` 讀回對話紀錄。
 
 ## 管理員 API
 

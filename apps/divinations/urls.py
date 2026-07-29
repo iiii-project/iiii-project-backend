@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     BlockCastView,
     ChatView,
+    ClaimView,
     DivinationDetailView,
     DivinationListCreateView,
     DrawFortuneView,
@@ -18,4 +19,5 @@ urlpatterns = [
     path("divinations/<uuid:session_id>/blocks/", BlockCastView.as_view(), name="cast-blocks"),
     path("divinations/<uuid:session_id>/interpret/", InterpretView.as_view(), name="interpret"),
     path("divinations/<uuid:session_id>/chat/", ChatView.as_view(), name="chat"),
+    path("divinations/<uuid:session_id>/claim/", ClaimView.as_view(), name="claim-session"),
 ]

@@ -1,6 +1,7 @@
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -100,10 +101,40 @@ class InterpretView(APIView):
         return Response(ok(DivinationSessionSerializer(session).data))
 
 
+class ClaimView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        with transaction.atomic():
+            session = DivinationSession.objects.select_for_update().filter(session_uuid=session_id).first()
+            if session is None or (session.user_id is not None and session.user_id != request.user.id):
+                # Same body/status for "doesn't exist", "already someone else's",
+                # and "not anonymous anymore" — session_id must not double as a
+                # way to probe ownership of other people's records.
+                raise NotFound("找不到這次求籤紀錄")
+            if session.user_id != request.user.id:
+                session.user = request.user
+                session.anonymous_user_id = ""
+                session.save(update_fields=["user", "anonymous_user_id", "updated_at"])
+        return Response(ok(DivinationSessionSerializer(session).data))
+
+
 class ChatView(APIView):
-    permission_classes = [AllowAny]
+    def get_permissions(self):
+        # Reading chat history requires the caller to be logged in as the owner
+        # (STORY-003). Posting a new message keeps the site-wide anonymous-session
+        # behavior, so only GET is locked down here.
+        if self.request.method == "GET":
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get(self, request, session_id):
+        owns_session = DivinationSession.objects.filter(session_uuid=session_id, user=request.user).exists()
+        if not owns_session:
+            # Same status and body whether session_id belongs to someone else or
+            # doesn't exist at all, so a non-owner request can't be used to probe
+            # which session IDs are valid.
+            raise NotFound("找不到這次求籤紀錄")
         return Response(ok({"messages": list_session_messages(session_id), "remaining_messages": None}))
 
     def post(self, request, session_id):

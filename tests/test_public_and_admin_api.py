@@ -137,6 +137,9 @@ def test_full_flow_through_http_endpoints_including_chat(monkeypatch):
     assert isinstance(chat_response.data["data"]["messages"], list)
     assert chat_response.data["data"]["messages"][-1]["content"] == "可以先準備好履歷"
 
+    # GET /chat/ requires an authenticated owner (STORY-003); this session was
+    # created anonymously, so even its own creator can't GET it back without
+    # logging in. See tests/test_story_003_chat_ownership.py for the
+    # authenticated-owner/non-owner coverage of this endpoint.
     get_response = client.get(f"/api/v1/divinations/{session_id}/chat/")
-    assert get_response.status_code == 200
-    assert get_response.data["data"]["messages"] == chat_response.data["data"]["messages"]
+    assert get_response.status_code == 401
