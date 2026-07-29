@@ -101,3 +101,42 @@ def test_fortune_import_requires_admin():
     )
 
     assert response.status_code in {401, 403}
+
+
+@pytest.mark.django_db
+def test_full_flow_through_http_endpoints_including_chat(monkeypatch):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    Fortune.objects.create(fortune_set=fortune_set, number=15, poem="籤詩")
+    client = APIClient()
+
+    create_response = client.post(
+        "/api/v1/divinations/",
+        {"question": "工作是否順利？", "categories": ["career"], "interaction_mode": "click"},
+        format="json",
+    )
+    session_id = create_response.data["data"]["session_id"]
+
+    client.post(f"/api/v1/divinations/{session_id}/prayer-complete/")
+    client.post(f"/api/v1/divinations/{session_id}/draw/")
+
+    sides = iter(["flat", "round"])
+    monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: next(sides))
+    cast_response = client.post(f"/api/v1/divinations/{session_id}/blocks/")
+    assert cast_response.data["data"]["result"] == "sheng"
+
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "這支籤代表工作運穩定")
+    interpret_response = client.post(f"/api/v1/divinations/{session_id}/interpret/")
+    assert interpret_response.status_code == 200
+    assert interpret_response.data["data"]["status"] == "completed"
+
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "可以先準備好履歷")
+    chat_response = client.post(f"/api/v1/divinations/{session_id}/chat/", {"message": "我該做什麼準備？"}, format="json")
+
+    assert chat_response.status_code == 200
+    assert chat_response.data["data"]["reply"] == "可以先準備好履歷"
+    assert isinstance(chat_response.data["data"]["messages"], list)
+    assert chat_response.data["data"]["messages"][-1]["content"] == "可以先準備好履歷"
+
+    get_response = client.get(f"/api/v1/divinations/{session_id}/chat/")
+    assert get_response.status_code == 200
+    assert get_response.data["data"]["messages"] == chat_response.data["data"]["messages"]

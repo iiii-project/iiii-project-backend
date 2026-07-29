@@ -110,5 +110,7 @@ class ChatView(APIView):
         DivinationDetailView().get_object(request, session_id)
         serializer = ChatSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reply = chat_about_session(session_id, serializer.validated_data["message"])
-        return Response(ok({"reply": reply, "remaining_messages": None}))
+        result = chat_about_session(session_id, serializer.validated_data["message"])
+        return Response(
+            ok({"reply": result["reply"], "messages": result["messages"], "remaining_messages": None})
+        )
