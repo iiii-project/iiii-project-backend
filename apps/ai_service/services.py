@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.divinations.models import DivinationSession
-from apps.divinations.services import DomainError
+from config.exceptions import DomainError
 
 from .models import AIMessage
 

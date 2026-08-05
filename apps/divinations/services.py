@@ -1,20 +1,11 @@
 import random
 
 from django.db import transaction
-from rest_framework.exceptions import APIException
 
 from apps.fortunes.models import Fortune, FortuneSet
+from config.exceptions import DomainError
 
 from .models import BlockCast, DivinationSession
-
-class DomainError(APIException):
-    status_code = 400
-    default_code = "INVALID_REQUEST"
-
-    def __init__(self, code: str, message: str, status_code: int = 400):
-        self.status_code = status_code
-        self.detail = message
-        self.default_code = code
 
 
 def create_session(

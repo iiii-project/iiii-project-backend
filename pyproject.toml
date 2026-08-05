@@ -13,6 +13,21 @@ dependencies = [
     "opik>=1.8",
     "python-dotenv>=1.1",
     "whitenoise>=6.9",
+    # live2d 角色對話引擎（移植自 Open-LLM-VTuber）
+    "channels>=4.1",
+    "daphne>=4.1",
+    "openai>=1.57",
+    "pyyaml>=6.0.2",
+    "chardet>=5.2.0",
+    "loguru>=0.7.2",
+    "numpy>=1.26,<2",
+    "pydub>=0.25.1",
+    "edge-tts>=7.0.0",
+    "sherpa-onnx==1.10.46",
+    "onnxruntime>=1.20.1",
+    "opencc-python-reimplemented>=0.1.7",
+    "pysbd>=0.3.4",
+    "langdetect>=1.0.9",
 ]
 
 [dependency-groups]

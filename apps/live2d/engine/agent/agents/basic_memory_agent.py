@@ -1,0 +1,185 @@
+"""Agent with chat memory. Trimmed from upstream open_llm_vtuber: MCP tool-calling,
+Claude-native tool loops, and vision-context injection removed (not used by this
+character's text/voice-only conversation flow) — this is a plain streaming
+memory+LLM pipeline.
+"""
+
+from typing import Any, AsyncIterator, Dict, List, Literal, Union
+
+from loguru import logger
+
+from ...chat_history import get_history
+from ..input_types import BatchInput, TextSource
+from ..output_types import DisplayText, SentenceOutput
+from ..stateless_llm.stateless_llm_interface import StatelessLLMInterface
+from ..transformers import (
+    actions_extractor,
+    display_processor,
+    response_quality_guard,
+    sentence_divider,
+    tts_filter,
+)
+from .agent_interface import AgentInterface
+
+
+class BasicMemoryAgent(AgentInterface):
+    """Agent with basic chat memory (no tool-calling)."""
+
+    _system: str = "You are a helpful assistant."
+
+    def __init__(
+        self,
+        llm: StatelessLLMInterface,
+        system: str,
+        live2d_model,
+        tts_preprocessor_config=None,
+        faster_first_response: bool = True,
+        segment_method: str = "pysbd",
+        interrupt_method: Literal["system", "user"] = "user",
+        max_response_characters: int = 500,
+    ):
+        super().__init__()
+        self._memory = []
+        self._live2d_model = live2d_model
+        self._tts_preprocessor_config = tts_preprocessor_config
+        self._faster_first_response = faster_first_response
+        self._segment_method = segment_method
+        self.interrupt_method = interrupt_method
+        self._interrupt_handled = False
+        self._max_response_characters = max_response_characters
+
+        self._set_llm(llm)
+        self.set_system(system if system else self._system)
+        logger.info("BasicMemoryAgent initialized.")
+
+    def _set_llm(self, llm: StatelessLLMInterface):
+        self._llm = llm
+        self.chat = self._chat_function_factory()
+
+    def set_system(self, system: str):
+        logger.debug(f"Memory Agent: Setting system prompt: '''{system}'''")
+        if self.interrupt_method == "user":
+            system = f"{system}\n\nIf you received `[interrupted by user]` signal, you were interrupted."
+        self._system = system
+
+    def _add_message(
+        self,
+        message: Union[str, List[Dict[str, Any]]],
+        role: str,
+        display_text: DisplayText | None = None,
+        skip_memory: bool = False,
+    ):
+        if skip_memory:
+            return
+
+        if isinstance(message, list):
+            text_content = " ".join(item["text"] for item in message if item.get("type") == "text").strip()
+        elif isinstance(message, str):
+            text_content = message
+        else:
+            logger.warning(f"_add_message received unexpected message type: {type(message)}")
+            text_content = str(message)
+
+        if not text_content and role == "assistant":
+            return
+
+        message_data = {"role": role, "content": text_content}
+        if display_text:
+            if display_text.name:
+                message_data["name"] = display_text.name
+            if display_text.avatar:
+                message_data["avatar"] = display_text.avatar
+
+        if self._memory and self._memory[-1]["role"] == role and self._memory[-1]["content"] == text_content:
+            return
+
+        self._memory.append(message_data)
+
+    def set_memory_from_history(self, conf_uid: str, history_uid: str) -> None:
+        messages = get_history(conf_uid, history_uid)
+        self._memory = []
+        for msg in messages:
+            role = "user" if msg["role"] == "human" else "assistant"
+            content = msg["content"]
+            if isinstance(content, str) and content:
+                self._memory.append({"role": role, "content": content})
+            else:
+                logger.warning(f"Skipping invalid message from history: {msg}")
+        logger.info(f"Loaded {len(self._memory)} messages from history.")
+
+    def handle_interrupt(self, heard_response: str) -> None:
+        if self._interrupt_handled:
+            return
+        self._interrupt_handled = True
+
+        if self._memory and self._memory[-1]["role"] == "assistant":
+            self._memory[-1]["content"] = heard_response + "..."
+        elif heard_response:
+            self._memory.append({"role": "assistant", "content": heard_response + "..."})
+
+        interrupt_role = "system" if self.interrupt_method == "system" else "user"
+        self._memory.append({"role": interrupt_role, "content": "[Interrupted by user]"})
+        logger.info(f"Handled interrupt with role '{interrupt_role}'.")
+
+    def _to_text_prompt(self, input_data: BatchInput) -> str:
+        message_parts = []
+        for text_data in input_data.texts:
+            if text_data.source == TextSource.INPUT:
+                message_parts.append(text_data.content)
+            elif text_data.source == TextSource.CLIPBOARD:
+                message_parts.append(f"[User shared content from clipboard: {text_data.content}]")
+        return "\n".join(message_parts).strip()
+
+    def _to_messages(self, input_data: BatchInput) -> List[Dict[str, Any]]:
+        messages = self._memory.copy()
+        text_prompt = self._to_text_prompt(input_data)
+
+        if text_prompt:
+            messages.append({"role": "user", "content": [{"type": "text", "text": text_prompt}]})
+            skip_memory = bool(input_data.metadata and input_data.metadata.get("skip_memory", False))
+            if not skip_memory:
+                self._add_message(text_prompt, "user")
+        else:
+            logger.warning("No content generated for user message.")
+
+        return messages
+
+    def _chat_function_factory(self):
+        @tts_filter(self._tts_preprocessor_config)
+        @display_processor()
+        @actions_extractor(self._live2d_model)
+        @response_quality_guard(self._max_response_characters)
+        @sentence_divider(
+            faster_first_response=self._faster_first_response,
+            segment_method=self._segment_method,
+            valid_tags=["think"],
+        )
+        async def chat_with_memory(input_data: BatchInput) -> AsyncIterator[str]:
+            self.reset_interrupt()
+            messages = self._to_messages(input_data)
+
+            token_stream = self._llm.chat_completion(messages, self._system)
+            complete_response = ""
+            async for text_chunk in token_stream:
+                if text_chunk:
+                    yield text_chunk
+                    complete_response += text_chunk
+
+            if complete_response:
+                skip_assistant_memory = bool(
+                    input_data.metadata and input_data.metadata.get("skip_assistant_memory", False)
+                )
+                self._add_message(complete_response, "assistant", skip_memory=skip_assistant_memory)
+
+        return chat_with_memory
+
+    def set_max_response_characters(self, value: int) -> None:
+        self._max_response_characters = value
+
+    async def chat(self, input_data: BatchInput) -> AsyncIterator[Union[SentenceOutput, Dict[str, Any]]]:
+        chat_func_decorated = self._chat_function_factory()
+        async for output in chat_func_decorated(input_data):
+            yield output
+
+    def reset_interrupt(self) -> None:
+        self._interrupt_handled = False

@@ -52,8 +52,9 @@
 - HTTPX
 - pytest
 - pytest-django
+- Django Channels + Daphne（`apps.live2d` 的 WebSocket 角色對話用；REST API 其餘部分維持原本的同步 DRF 寫法不受影響）
 
-禁止自行改用 FastAPI、Flask、SQLAlchemy 或 PostgreSQL。
+禁止自行改用 FastAPI、Flask、SQLAlchemy 或 PostgreSQL。`apps/live2d/engine/` 底下是從 Open-LLM-VTuber（原獨立 FastAPI 服務 `Interactive-3D-model/live2d-backend`）移植進來、改寫成 Django Channels 的角色對話引擎（LLM/ASR/TTS/Live2D 模型資訊/對話歷史），詳見該目錄各檔案開頭的移植說明註解。
 
 ---
 
@@ -66,16 +67,20 @@ backend/
 ├── config/
 │   ├── settings.py
 │   ├── urls.py
-│   ├── asgi.py
-│   └── wsgi.py
+│   ├── asgi.py          # ProtocolTypeRouter：http → Django、websocket → apps.live2d
+│   ├── wsgi.py
+│   └── exceptions.py    # DomainError（跨 app 共用的 service 層例外）
 ├── apps/
 │   ├── accounts/
 │   ├── fortunes/
 │   ├── divinations/
 │   ├── ai_service/
-│   └── system/
+│   ├── system/
+│   └── live2d/           # Live2D 虛擬角色對話（WebSocket，見 4. live2d）
+│       └── engine/        # 移植自 Open-LLM-VTuber 的 LLM/ASR/TTS/對話引擎
 ├── data/
-│   └── ai_fortune.sqlite3
+│   ├── ai_fortune.sqlite3
+│   └── live2d/            # 角色模型、ASR 模型、對話歷史等執行期資料（不進版控）
 ├── logs/
 ├── static/
 ├── media/
@@ -128,6 +133,14 @@ backend/
 - SystemSetting
 - SystemLog
 - 使用統計
+
+## live2d
+
+- WebSocket `/client-ws`（Django Channels `Live2DConsumer`）：Live2D 虛擬角色「米粒」的即時對話
+- 靜態路由 `/live2d-models/*`、`/avatars/*`、`/bg/*`、`/cache/*`、`/live2d-models/info`
+- `engine/` 底下移植自 Open-LLM-VTuber（原獨立 FastAPI 服務）：LLM 對話（沿用 `apps.ai_service` 同一組 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`，串流＋記憶）、ASR（`sherpa_onnx_asr`，本地免費）、TTS（`edge_tts`，本地免費）、口型同步音量計算、對話歷史（JSON 檔案，存於 `data/live2d/chat_history/`）
+- 刻意不支援：多人群組對話、視覺/姿勢辨識、MCP 工具呼叫、直播代理、多角色切換（目前只有「米粒」單一固定角色設定，見 `engine/character.py`）——需求出現再評估是否移植
+- 目前只用單一 process、`InMemoryChannelLayer`；要跑多 worker 需另外導入 Redis channel layer
 - 健康檢查
 
 ---
