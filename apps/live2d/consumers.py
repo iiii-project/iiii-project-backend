@@ -19,12 +19,15 @@ import numpy as np
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from loguru import logger
 
+from .engine.agent.output_types import Actions, DisplayText
 from .engine.character import build_config
-from .engine.chat_history import create_new_history, delete_history, get_history, get_history_list
+from .engine.chat_history import create_new_history, delete_history, get_history, get_history_list, store_message
+from .engine.conversation import TTSTaskManager, finalize_conversation_turn, send_conversation_start_signals
 from .engine.conversation_handler import handle_conversation_trigger, handle_individual_interrupt
 from .engine.message_handler import message_handler
 from .engine.paths import BACKGROUNDS_DIR
 from .engine.service_context import ServiceContext
+from .engine.utils.sentence_divider import segment_text_by_pysbd
 
 _default_context: ServiceContext | None = None
 _default_context_lock = asyncio.Lock()
@@ -125,6 +128,13 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
                         self.received_audio_buffer[self.client_uid],
                         np.array(audio_data, dtype=np.float32),
                     )
+            elif msg_type == "speak-text":
+                # 必須包成背景 task（跟 handle_conversation_trigger 一樣）：_handle_speak_text
+                # 會等待 client 回傳 frontend-playback-complete，若直接 await 在這裡會卡死整個
+                # receive_json 迴圈，導致那則回傳訊息永遠等不到被處理的機會（實測踩過一次）。
+                self.current_conversation_tasks[self.client_uid] = asyncio.create_task(
+                    self._handle_speak_text(content.get("text", ""))
+                )
             elif msg_type == "interrupt-signal":
                 await handle_individual_interrupt(
                     client_uid=self.client_uid,
@@ -164,6 +174,53 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             await self._send_text(json.dumps({"type": "error", "message": str(e)}))
+
+    async def _handle_speak_text(self, text: str) -> None:
+        """Speak a piece of text (e.g. a fortune reading) directly via TTS, bypassing the
+        LLM entirely — the words must be exactly what ai_service already generated, not a
+        paraphrase. The text is still remembered in the agent's memory (and chat history) so
+        a follow-up question in the normal chat flow has the right context."""
+        text = (text or "").strip()
+        if not text or not self.context:
+            return
+
+        character_name = self.context.character_config.character_name
+        avatar = self.context.character_config.avatar
+
+        # 記憶跟歷史記錄要在排 TTS 之前就先寫入，不能等 finalize_conversation_turn 裡等
+        # frontend-playback-complete 那段跑完——播放要等好幾秒真實時間，使用者的追問很可能
+        # 在那之前就送到，若記憶還沒寫入，追問會問不到剛剛念了什麼（實測踩過一次）。
+        if self.context.agent_engine:
+            self.context.agent_engine.remember(text, role="assistant")
+        if self.context.history_uid:
+            await asyncio.to_thread(
+                store_message,
+                conf_uid=self.context.character_config.conf_uid,
+                history_uid=self.context.history_uid,
+                role="ai",
+                content=text,
+                name=character_name,
+                avatar=avatar,
+            )
+
+        tts_manager = TTSTaskManager()
+        await send_conversation_start_signals(self._send_text)
+
+        sentences, remaining = segment_text_by_pysbd(text)
+        if remaining:
+            sentences.append(remaining)
+
+        for sentence in sentences:
+            await tts_manager.speak(
+                tts_text=sentence,
+                display_text=DisplayText(text=sentence, name=character_name, avatar=avatar),
+                actions=Actions(),
+                live2d_model=self.context.live2d_model,
+                tts_engine=self.context.tts_engine,
+                websocket_send=self._send_text,
+            )
+
+        await finalize_conversation_turn(tts_manager, self._send_text, self.client_uid)
 
     async def _handle_fetch_history(self, content: dict) -> None:
         history_uid = content.get("history_uid")
