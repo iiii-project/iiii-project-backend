@@ -291,7 +291,7 @@ def test_prewarmed_interpretation_is_reused_without_calling_llm_again(monkeypatc
     calls = []
     monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: calls.append(messages) or "預熱好的解籤")
 
-    # 抽籤那一刻的預熱：擲筊結果還沒產生，用必然成立的 sheng 當條件
+    # 抽籤那一刻的預熱：prompt 不含擲筊結果，籤詩/問題/主題到齊即可先跑
     prewarm_interpretation(session)
     result = interpret_session(session.session_uuid)
 

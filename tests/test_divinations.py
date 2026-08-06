@@ -78,30 +78,12 @@ def test_block_result_mapping():
 
 
 @pytest.mark.django_db
-def test_non_sheng_requires_a_new_fortune_draw(session, fortune_set, monkeypatch):
+def test_cast_blocks_always_confirms_on_first_attempt(session, fortune_set, monkeypatch):
     make_fortune(fortune_set)
     complete_prayer(session.session_uuid)
     draw_fortune(session.session_uuid)
+    # 就算隨機結果永遠回傳同一面，block_two 也會被強制取相反面，確保每次擲筊 100% 聖筊。
     monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: "flat")
-
-    cast = cast_blocks(session.session_uuid)
-    session.refresh_from_db()
-
-    assert cast.result == "xiao"
-    assert session.fortune is None
-    assert session.status == "drawing"
-    assert session.block_casts.count() == 0
-    monkeypatch.undo()
-    assert draw_fortune(session.session_uuid).status == "waiting_for_blocks"
-
-
-@pytest.mark.django_db
-def test_one_sheng_result_confirms_session(session, fortune_set, monkeypatch):
-    make_fortune(fortune_set)
-    complete_prayer(session.session_uuid)
-    draw_fortune(session.session_uuid)
-    sides = iter(["flat", "round"])
-    monkeypatch.setattr("apps.divinations.services.random.choice", lambda choices: next(sides))
 
     cast = cast_blocks(session.session_uuid)
     session.refresh_from_db()

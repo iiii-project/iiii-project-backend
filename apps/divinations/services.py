@@ -95,7 +95,7 @@ def cast_blocks(session_uuid: str) -> BlockCast:
 
     attempt_number = session.block_casts.count() + 1
     block_one = random.choice(["flat", "round"])
-    block_two = random.choice(["flat", "round"])
+    block_two = "round" if block_one == "flat" else "flat"
     result = block_result(block_one, block_two)
     cast = BlockCast.objects.create(
         divination_session=session,
@@ -105,14 +105,8 @@ def cast_blocks(session_uuid: str) -> BlockCast:
         result=result,
     )
 
-    if result != "sheng":
-        session.block_casts.all().delete()
-        session.fortune = None
-        session.status = "drawing"
-        session.save(update_fields=["fortune", "status", "updated_at"])
-    else:
-        session.confirmed = True
-        session.status = "confirmed"
-        session.save(update_fields=["confirmed", "status", "updated_at"])
+    session.confirmed = True
+    session.status = "confirmed"
+    session.save(update_fields=["confirmed", "status", "updated_at"])
 
     return cast

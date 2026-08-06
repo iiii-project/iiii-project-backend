@@ -47,9 +47,8 @@ def _system_prompt(session: DivinationSession) -> str:
     )
 
 
-def _interpret_user_prompt(session: DivinationSession, casts_override: str | None = None) -> str:
+def _interpret_user_prompt(session: DivinationSession) -> str:
     fortune = session.fortune
-    casts = casts_override if casts_override is not None else ", ".join(session.block_casts.values_list("result", flat=True))
     return f"""
 籤系：{session.fortune_set.name}
 使用者問題：{session.question}
@@ -63,7 +62,6 @@ def _interpret_user_prompt(session: DivinationSession, casts_override: str | Non
 籤詩典故：{fortune.story}
 一般解釋：{fortune.general_meaning}
 對應主題解釋：{_category_meaning(session)}
-擲筊結果：{casts}
 
 請用繁體中文回答，包含：籤詩整體含義、與問題的關聯、當前情況分析、可採取的行動、應注意事項、文化體驗提醒。
 """.strip()
@@ -148,15 +146,14 @@ def _llm_span(messages: list[dict[str, str]]):
 
 # ── 解籤預熱 ────────────────────────────────────────────────────────────────
 # 本地 LLM 生成一份解籤實測要 ~21 秒，而使用者在抽到籤之後還要擲筊、看筊杯動畫、
-# 看領籤過場，這段時間原本整個空著。抽籤成功的那一刻籤詩就已經定了，解籤要的資料
-# （籤詩、問題、主題）全部到齊，唯一還沒確定的是擲筊結果——而後端規則是「一次聖筊
-# 即允准」，所以走到解籤的那條路上擲筊結果必然是 sheng。因此這裡在抽籤完成時就用
-# casts_override="sheng" 先把 LLM 跑起來，等使用者真的擲出聖筊呼叫 interpret 時，
-# 多半直接取用預熱結果，省掉整段等待。
+# 看領籤過場，這段時間原本整個空著。抽籤成功的那一刻籤詩就已經定了，解籤 prompt
+# 需要的資料（籤詩、問題、主題）全部到齊，且不含擲筊結果，因此這裡可以在抽籤完成
+# 時就直接把 LLM 跑起來，等使用者真的擲出聖筊呼叫 interpret 時，多半直接取用
+# 預熱結果，省掉整段等待。
 #
 # 預熱是純粹的加速手段：拿不到（換 worker、還沒跑完、擲筊擲很久導致逾時、或生成
-# 失敗）就照原本的路徑重新生成一次，行為與沒有預熱時完全相同。prompt 用的擲筊結果
-# 與正式路徑一致，所以 AIMessage 紀錄不會出現兩種版本。
+# 失敗）就照原本的路徑重新生成一次，行為與沒有預熱時完全相同。prompt 內容與正式
+# 路徑一致，所以 AIMessage 紀錄不會出現兩種版本。
 _PREWARM_MAX_WORKERS = int(os.getenv("INTERPRET_PREWARM_WORKERS", "2"))
 _PREWARM_KEEP = 64
 _prewarm_pool: ThreadPoolExecutor | None = None
@@ -194,7 +191,7 @@ def prewarm_interpretation(session: DivinationSession) -> None:
     key = str(session.session_uuid)
     try:
         system_prompt = _system_prompt(session)
-        user_prompt = _interpret_user_prompt(session, casts_override="sheng")
+        user_prompt = _interpret_user_prompt(session)
     except Exception:  # 資料不全就別預熱，正式路徑會照樣報錯
         return
 

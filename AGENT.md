@@ -29,7 +29,7 @@
 必要功能對照：
 
 - 籤詩資料庫建置：由 `FortuneSet` / `Fortune` 結構化保存籤詩、詩意、典故、分類解釋與來源；第一階段預設 `SIXTY_JIAZI`。
-- AI 解籤引擎：由 `ai_service` 串接 OpenAI-compatible chat completions，依籤詩、問事分類、使用者問題與擲筊結果產生繁體中文白話解籤，並保存對話紀錄。
+- AI 解籤引擎：由 `ai_service` 串接 OpenAI-compatible chat completions，依籤詩、問事分類與使用者問題產生繁體中文白話解籤（不包含擲筊結果），並保存對話紀錄。
 - 解籤網頁：前端以 QR code 進入頁面，後端提供籤系列表、籤號查詢、session 建立、解籤、聊天與可分享的 session id。
 - 後台管理：第一階段使用 Django Admin 維護籤詩與查詢紀錄，另提供 admin-only 使用統計 API。
 
@@ -484,7 +484,8 @@ AI 至少接收：
 - 籤詩典故
 - 一般解釋
 - 對應主題解釋
-- 擲筊結果
+
+不得包含擲筊結果（幾次才擲出聖筊、過程是否重抽）：這屬於使用者與籤詩之間的體驗，不應讓 AI 知道或評論。
 
 回答應包含：
 
