@@ -135,6 +135,14 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
                 self.current_conversation_tasks[self.client_uid] = asyncio.create_task(
                     self._handle_speak_text(content.get("text", ""))
                 )
+            elif msg_type == "remember-context":
+                # 靜默寫入記憶：不經 TTS、不進聊天記錄，純粹讓角色「知道」某件事
+                # （目前用在小夥伴開場白只講招呼語，但仍需要知道解籤全文以便答追問）。
+                # silent=True：這段內容從沒被講出來過，之後若使用者打斷角色說話，
+                # handle_interrupt() 不能把這筆記憶誤當成「被打斷的發言」蓋掉。
+                # 純同步操作、沒有任何 await 會卡住，不需要像 speak-text 那樣包成背景 task。
+                if self.context and self.context.agent_engine:
+                    self.context.agent_engine.remember(content.get("text", ""), role="assistant", silent=True)
             elif msg_type == "interrupt-signal":
                 await handle_individual_interrupt(
                     client_uid=self.client_uid,
