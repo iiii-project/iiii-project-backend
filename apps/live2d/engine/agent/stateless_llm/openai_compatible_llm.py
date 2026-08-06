@@ -5,6 +5,7 @@ this character's conversation flow), leaving a plain text-delta stream.
 """
 
 from typing import Any, AsyncIterator, Dict, List
+from urllib.parse import urlparse
 
 from loguru import logger
 from openai import APIConnectionError, APIError, AsyncOpenAI, RateLimitError
@@ -25,6 +26,9 @@ class AsyncLLM(StatelessLLMInterface):
         self.base_url = base_url
         self.model = model
         self.temperature = temperature
+        # service_tier=fast 是 OpenAI 平台自己的功能，換成本機模型（LM Studio/Ollama/
+        # llama.cpp）時只在真的打 api.openai.com 才加這個欄位，換掉 base_url 就自動不送。
+        self._use_fast_service_tier = urlparse(base_url).hostname == "api.openai.com"
         self.client = AsyncOpenAI(
             base_url=base_url,
             organization=organization_id,
@@ -46,11 +50,13 @@ class AsyncLLM(StatelessLLMInterface):
                 messages_with_system = [{"role": "system", "content": system}, *messages]
             logger.debug(f"Messages: {messages_with_system}")
 
+            extra_kwargs = {"service_tier": "fast"} if self._use_fast_service_tier else {}
             stream = await self.client.chat.completions.create(
                 messages=messages_with_system,
                 model=self.model,
                 stream=True,
                 temperature=self.temperature,
+                **extra_kwargs,
             )
 
             async for chunk in stream:

@@ -86,17 +86,30 @@ def _trust_env_for_llm() -> bool:
     return host not in _LOOPBACK_HOSTS
 
 
+def _use_fast_service_tier() -> bool:
+    """`service_tier: fast` 是 OpenAI 平台自己的計費/排程功能，只有真的打 OpenAI
+    官方 API 才有意義。換成本機模型（LM Studio/Ollama/llama.cpp）時這個欄位對
+    對方來說毫無意義，依實測 llama.cpp/Ollama 都會直接忽略未知欄位，但沒有
+    每一種本機伺服器都驗證過，所以只在確定是 OpenAI 官方端點時才加這個欄位，
+    換成本機模型不需要改任何設定就自動不送。"""
+    return httpx.URL(settings.LLM_BASE_URL).host == "api.openai.com"
+
+
 def _chat(messages: list[dict[str, str]]) -> str:
     headers = {}
     if settings.LLM_API_KEY:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+
+    payload = {"model": settings.LLM_MODEL, "messages": messages}
+    if _use_fast_service_tier():
+        payload["service_tier"] = "fast"
 
     try:
         with _llm_span(messages) as span:
             response = httpx.post(
                 f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
                 headers=headers,
-                json={"model": settings.LLM_MODEL, "messages": messages},
+                json=payload,
                 timeout=settings.LLM_TIMEOUT_SECONDS,
                 trust_env=_trust_env_for_llm(),
             )

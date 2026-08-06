@@ -22,7 +22,6 @@ def _prepare_audio_payload_sync(
     chunk_length_ms: int = 20,
     display_text: DisplayText = None,
     actions: Actions = None,
-    forwarded: bool = False,
 ) -> dict:
     if isinstance(display_text, DisplayText):
         display_text = display_text.to_dict()
@@ -35,7 +34,6 @@ def _prepare_audio_payload_sync(
             "slice_length": chunk_length_ms,
             "display_text": display_text,
             "actions": actions.to_dict() if actions else None,
-            "forwarded": forwarded,
         }
 
     try:
@@ -54,7 +52,6 @@ def _prepare_audio_payload_sync(
         "slice_length": chunk_length_ms,
         "display_text": display_text,
         "actions": actions.to_dict() if actions else None,
-        "forwarded": forwarded,
     }
 
 
@@ -63,7 +60,6 @@ async def prepare_audio_payload(
     chunk_length_ms: int = 20,
     display_text: DisplayText = None,
     actions: Actions = None,
-    forwarded: bool = False,
 ) -> dict:
     """Async wrapper: pydub/ffmpeg decoding is blocking, run it off the event loop."""
     return await asyncio.to_thread(
@@ -72,5 +68,4 @@ async def prepare_audio_payload(
         chunk_length_ms,
         display_text,
         actions,
-        forwarded,
     )
