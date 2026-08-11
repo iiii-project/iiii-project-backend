@@ -69,7 +69,6 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
             )
             await self._send_text(json.dumps({"type": "full-text", "text": "Connection established"}))
             await self._send_set_model_and_conf()
-            await self._send_text(json.dumps({"type": "control", "text": "start-mic"}))
 
             # The browser may not have subscribed to messages yet when the socket opens.
             await asyncio.sleep(0.5)
