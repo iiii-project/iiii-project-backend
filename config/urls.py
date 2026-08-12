@@ -19,5 +19,6 @@ urlpatterns = [
     path("api/v1/", include("apps.fortunes.urls")),
     path("api/v1/", include("apps.divinations.urls")),
     path("api/v1/", include("apps.system.urls")),
+    path("api/v1/", include("apps.speech.urls")),
     path("", include("apps.live2d.urls")),
 ]

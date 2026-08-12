@@ -47,7 +47,32 @@ INSTALLED_APPS = [
     "apps.ai_service",
     "apps.system",
     "apps.live2d",
+    "apps.speech",
 ]
+
+# ── 語音轉寫 ──
+# ENGINE:
+#   "cloud"          線上 API（台語走這條）。CLOUD_URL 指到供應商端點：
+#                    - Hugging Face Inference 跑 Breeze-ASR-26 → CLOUD_MODE=raw
+#                    - OpenAI 相容的 /v1/audio/transcriptions → CLOUD_MODE=multipart
+#   "faster_whisper" 本機跑台語 fine-tune 的 Whisper，需 MODEL_PATH 指向 CTranslate2 目錄
+#   "sense_voice"    沿用 Live2D 那套 sherpa-onnx（華語可用、不含台語）
+# 設定不全時語音端點會回 503 並請使用者打字——打字永遠是可用的路。
+ASR = {
+    "ENGINE": os.getenv("ASR_ENGINE", "cloud"),
+    "LANGUAGE": os.getenv("ASR_LANGUAGE", "zh"),
+    # 線上 API
+    "CLOUD_URL": os.getenv("ASR_CLOUD_URL", ""),
+    "CLOUD_TOKEN": os.getenv("ASR_CLOUD_TOKEN", ""),
+    "CLOUD_MODE": os.getenv("ASR_CLOUD_MODE", "raw"),
+    "CLOUD_MODEL": os.getenv("ASR_CLOUD_MODEL", ""),
+    "CLOUD_TIMEOUT": os.getenv("ASR_CLOUD_TIMEOUT", "60"),
+    # 本機模型
+    "MODEL_PATH": os.getenv("ASR_MODEL_PATH", ""),
+    "DEVICE": os.getenv("ASR_DEVICE", "cpu"),
+    "COMPUTE_TYPE": os.getenv("ASR_COMPUTE_TYPE", "int8"),
+    "BEAM_SIZE": os.getenv("ASR_BEAM_SIZE", "1"),
+}
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
