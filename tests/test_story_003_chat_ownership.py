@@ -109,3 +109,25 @@ def test_chat_post_still_allows_anonymous_session_owner(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["data"]["reply"] == "匿名可以繼續對話"
+
+
+@pytest.mark.django_db
+def test_chat_post_rejects_message_over_250_chars():
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=2000, poem="詩")
+    session = DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question="匿名問題",
+        category="career",
+        interaction_mode="click",
+        status="completed",
+        confirmed=True,
+        ai_interpretation="已解籤",
+    )
+
+    response = APIClient().post(
+        f"/api/v1/divinations/{session.session_uuid}/chat/", {"message": "問" * 251}, format="json"
+    )
+
+    assert response.status_code == 400

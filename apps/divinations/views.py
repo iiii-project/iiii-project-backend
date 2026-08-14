@@ -10,6 +10,7 @@ from apps.ai_service.services import (
     interpret_session,
     list_session_messages,
     prewarm_interpretation,
+    remaining_chat_messages,
 )
 from config.utils import ok
 
@@ -149,7 +150,9 @@ class ChatView(APIView):
             # doesn't exist at all, so a non-owner request can't be used to probe
             # which session IDs are valid.
             raise NotFound("找不到這次求籤紀錄")
-        return Response(ok({"messages": list_session_messages(session_id), "remaining_messages": None}))
+        return Response(
+            ok({"messages": list_session_messages(session_id), "remaining_messages": remaining_chat_messages(session_id)})
+        )
 
     def post(self, request, session_id):
         DivinationDetailView().get_object(request, session_id)
@@ -157,5 +160,11 @@ class ChatView(APIView):
         serializer.is_valid(raise_exception=True)
         result = chat_about_session(session_id, serializer.validated_data["message"])
         return Response(
-            ok({"reply": result["reply"], "messages": result["messages"], "remaining_messages": None})
+            ok(
+                {
+                    "reply": result["reply"],
+                    "messages": result["messages"],
+                    "remaining_messages": result["remaining_messages"],
+                }
+            )
         )

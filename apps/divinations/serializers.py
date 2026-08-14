@@ -119,4 +119,4 @@ class BlockCastSerializer(serializers.ModelSerializer):
 
 
 class ChatSerializer(serializers.Serializer):
-    message = serializers.CharField(min_length=1, max_length=500)
+    message = serializers.CharField(min_length=1, max_length=250)

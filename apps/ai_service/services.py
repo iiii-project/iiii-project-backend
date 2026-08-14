@@ -344,10 +344,24 @@ def list_session_messages(session_uuid: str) -> list[dict]:
     return [_message_data(message) for message in messages]
 
 
+CHAT_MESSAGE_LIMIT = 5
+
+
+def _chat_message_count(session: DivinationSession) -> int:
+    return session.ai_messages.filter(role="user", is_hidden=False).count()
+
+
+def remaining_chat_messages(session_uuid: str) -> int:
+    session = DivinationSession.objects.get(session_uuid=session_uuid)
+    return max(0, CHAT_MESSAGE_LIMIT - _chat_message_count(session))
+
+
 def chat_about_session(session_uuid: str, message: str) -> dict:
     session = DivinationSession.objects.select_related("fortune_set", "fortune").get(session_uuid=session_uuid)
     if session.status != "completed":
         raise DomainError("INVALID_SESSION_STATE", "解籤完成後才能聊天", 409)
+    if _chat_message_count(session) >= CHAT_MESSAGE_LIMIT:
+        raise DomainError("CHAT_LIMIT_REACHED", "已達本次對話上限，請重新求籤", 409)
 
     messages = [{"role": "system", "content": _system_prompt(session)}]
     history = list(session.ai_messages.exclude(role="system").order_by("-created_at")[:10])
@@ -361,4 +375,8 @@ def chat_about_session(session_uuid: str, message: str) -> dict:
             AIMessage(divination_session=session, role="assistant", content=reply, model_name=settings.LLM_MODEL),
         ]
     )
-    return {"reply": reply, "messages": list_session_messages(session_uuid)}
+    return {
+        "reply": reply,
+        "messages": list_session_messages(session_uuid),
+        "remaining_messages": remaining_chat_messages(session_uuid),
+    }

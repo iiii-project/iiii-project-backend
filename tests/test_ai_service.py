@@ -246,6 +246,33 @@ def test_chat_keeps_context_and_returns_display_messages(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_chat_reports_remaining_messages_and_stops_at_limit(monkeypatch):
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    fortune = Fortune.objects.create(fortune_set=fortune_set, number=4, poem="詩")
+    session = DivinationSession.objects.create(
+        fortune_set=fortune_set,
+        fortune=fortune,
+        question="最近適合換工作嗎？",
+        category="career",
+        interaction_mode="click",
+        status="completed",
+        confirmed=True,
+        ai_interpretation="初始解籤",
+    )
+    AIMessage.objects.create(divination_session=session, role="system", content="系統", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="user", content="隱藏解籤 prompt", is_hidden=True)
+    AIMessage.objects.create(divination_session=session, role="assistant", content="初始解籤", is_hidden=True)
+    monkeypatch.setattr("apps.ai_service.services._chat", lambda messages: "回覆")
+
+    for expected_remaining in [4, 3, 2, 1, 0]:
+        data = chat_about_session(session.session_uuid, "追問")
+        assert data["remaining_messages"] == expected_remaining
+
+    with pytest.raises(DomainError):
+        chat_about_session(session.session_uuid, "第六次追問")
+
+
+@pytest.mark.django_db
 def test_list_session_messages_hides_initial_interpretation_prompt():
     fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
     fortune = Fortune.objects.create(fortune_set=fortune_set, number=3, poem="詩")
