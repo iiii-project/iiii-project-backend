@@ -36,14 +36,23 @@ def _category_meaning(session: DivinationSession) -> str:
     return getattr(fortune, field, "") or fortune.general_meaning
 
 
+_INTERPRET_MARKDOWN_INSTRUCTION = (
+    "重要：解籤回覆必須是可直接渲染的 Markdown（.md）格式。"
+    "請使用 Markdown 標題、條列清單與段落組織；"
+    "總字數請控制在約 300 字（可接受 250～350 字），內容精簡、不要冗長；"
+    "不要輸出 HTML、JSON、程式碼區塊或未排版的純文字。"
+)
+
+
 def _system_prompt(session: DivinationSession) -> str:
     template = session.fortune_set.prompt_template.strip()
     if template:
-        return template
+        return f"{template}\n\n{_INTERPRET_MARKDOWN_INSTRUCTION}"
     return (
         "你是親切且專業的傳統籤詩文化解說助手。請只根據提供的籤詩資料回答，"
         "以尊重、平易近人的態度說明籤詩含義，並嚴格只使用繁體中文回覆。"
         "回覆時請提醒使用者本內容僅供文化體驗與參考，不能取代專業意見。"
+        f"{_INTERPRET_MARKDOWN_INSTRUCTION}"
     )
 
 
@@ -63,7 +72,13 @@ def _interpret_user_prompt(session: DivinationSession) -> str:
 一般解釋：{fortune.general_meaning}
 對應主題解釋：{_category_meaning(session)}
 
-請用繁體中文回答，包含：籤詩整體含義、與問題的關聯、當前情況分析、可採取的行動、應注意事項、文化體驗提醒。
+請用繁體中文回答，且強制輸出為 Markdown（.md）格式。總字數請控制在約 300 字（可接受 250～350 字），內容精簡、不要冗長。請至少使用下列 Markdown 二級標題，並以段落或條列整理內容：
+## 籤詩整體含義
+## 與問題的關聯
+## 當前情況分析
+## 可採取的行動
+## 應注意事項
+## 文化體驗提醒
 """.strip()
 
 
@@ -167,7 +182,10 @@ def _llm_span(messages: list[dict[str, str]]):
 # 預熱是純粹的加速手段：拿不到（換 worker、還沒跑完、擲筊擲很久導致逾時、或生成
 # 失敗）就照原本的路徑重新生成一次，行為與沒有預熱時完全相同。prompt 內容與正式
 # 路徑一致，所以 AIMessage 紀錄不會出現兩種版本。
-_PREWARM_MAX_WORKERS = int(os.getenv("INTERPRET_PREWARM_WORKERS", "2"))
+try:
+    _PREWARM_MAX_WORKERS = int(os.getenv("INTERPRET_PREWARM_WORKERS", "2"))
+except ValueError:
+    _PREWARM_MAX_WORKERS = 2
 _PREWARM_KEEP = 64
 _prewarm_pool: ThreadPoolExecutor | None = None
 _prewarm_jobs: "OrderedDict[str, _PrewarmJob]" = OrderedDict()
