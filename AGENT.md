@@ -136,10 +136,10 @@ backend/
 
 ## live2d
 
-- WebSocket `/client-ws`（Django Channels `Live2DConsumer`）：Live2D 虛擬角色「米粒」的即時對話
+- WebSocket `/client-ws`（Django Channels `Live2DConsumer`）：Live2D 虛擬角色「金鶴」的即時對話
 - 靜態路由 `/live2d-models/*`、`/avatars/*`、`/bg/*`、`/cache/*`、`/live2d-models/info`
 - `engine/` 底下移植自 Open-LLM-VTuber（原獨立 FastAPI 服務）：LLM 對話（沿用 `apps.ai_service` 同一組 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`，串流＋記憶）、ASR（`sherpa_onnx_asr`，本地免費）、TTS（`edge_tts`，本地免費）、口型同步音量計算、對話歷史（JSON 檔案，存於 `data/live2d/chat_history/`）
-- 刻意不支援：多人群組對話、視覺/姿勢辨識、MCP 工具呼叫、直播代理、多角色切換（目前只有「米粒」單一固定角色設定，見 `engine/character.py`）——需求出現再評估是否移植
+- 刻意不支援：多人群組對話、視覺/姿勢辨識、MCP 工具呼叫、直播代理、多角色切換（目前只有「金鶴」單一固定角色設定，見 `engine/character.py`）——需求出現再評估是否移植
 - 目前只用單一 process、`InMemoryChannelLayer`；要跑多 worker 需另外導入 Redis channel layer
 - 健康檢查
 
