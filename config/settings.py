@@ -105,6 +105,16 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+# `manage.py runserver`（本機開發用）預設改成 8003，跟前端／其他專案常用的 8000
+# 分開，避免本機同時開好幾個服務時互撞埠號。只影響本機 `uv run python manage.py
+# runserver` 這種沒帶埠號的呼叫；Docker/正式環境走的是 Dockerfile 裡
+# `gunicorn --bind 0.0.0.0:8000`，不受這裡影響。daphne 因為排在 INSTALLED_APPS
+# 最前面，它的 runserver 指令會蓋掉 Django 內建的那個，所以要動就直接改 daphne
+# 這個 Command class 的 default_port，而不是去改 Django 內建那個。
+from daphne.management.commands.runserver import Command as _DaphneRunserverCommand
+
+_DaphneRunserverCommand.default_port = os.getenv("DJANGO_RUNSERVER_DEFAULT_PORT", "8003")
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
