@@ -121,11 +121,27 @@ CHANNEL_LAYERS = {
     },
 }
 
+# 多用戶同時寫入時，SQLite 預設的 rollback journal 模式一次只能有一個讀者或寫者持
+# 有鎖，且「先取讀鎖、真正寫入時才升級成寫鎖」的預設行為容易在多個 request 同時
+# 升級鎖時互撞成 `database is locked`。這裡改用 WAL（讀寫可並行）並讓
+# transaction.atomic() 一開始就直接拿寫鎖（BEGIN IMMEDIATE），把「升級鎖衝突」
+# 改成「排隊等鎖」，busy_timeout 內都會自動重試而不是立刻报錯。純資料庫連線層設
+# 定，不影響任何 API 行為或流程。
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "data" / "ai_fortune.sqlite3",
-        "OPTIONS": {"timeout": 20},
+        "OPTIONS": {
+            "timeout": 20,
+            "transaction_mode": "IMMEDIATE",
+            "init_command": (
+                "PRAGMA journal_mode=WAL;"
+                "PRAGMA synchronous=NORMAL;"
+                "PRAGMA busy_timeout=20000;"
+                "PRAGMA cache_size=-20000;"
+                "PRAGMA temp_store=MEMORY;"
+            ),
+        },
     }
 }
 
