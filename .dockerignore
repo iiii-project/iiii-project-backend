@@ -1,0 +1,13 @@
+.env
+.git
+.opencode
+.venv
+.pytest_cache
+__pycache__
+**/__pycache__
+*.pyc
+data
+media
+static
+logs
+llamacpp

@@ -16,6 +16,9 @@ dependencies = [
     # live2d 角色對話引擎（移植自 Open-LLM-VTuber）
     "channels>=4.1",
     "daphne>=4.1",
+    # 生產環境開多個 process/replica 時,CHANNEL_LAYERS 需要跨 process 共享狀態才
+    # 能正確廣播 WebSocket 訊息(見 config/settings.py 的 REDIS_URL 開關)
+    "channels-redis>=4.2",
     "openai>=1.57",
     "pyyaml>=6.0.2",
     "chardet>=5.2.0",

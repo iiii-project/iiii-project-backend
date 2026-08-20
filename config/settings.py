@@ -108,17 +108,27 @@ ASGI_APPLICATION = "config.asgi.application"
 # `manage.py runserver`（本機開發用）預設改成 8003，跟前端／其他專案常用的 8000
 # 分開，避免本機同時開好幾個服務時互撞埠號。只影響本機 `uv run python manage.py
 # runserver` 這種沒帶埠號的呼叫；Docker/正式環境走的是 Dockerfile 裡
-# `gunicorn --bind 0.0.0.0:8000`，不受這裡影響。daphne 因為排在 INSTALLED_APPS
+# `daphne -b 0.0.0.0 -p 8000`，不受這裡影響。daphne 因為排在 INSTALLED_APPS
 # 最前面，它的 runserver 指令會蓋掉 Django 內建的那個，所以要動就直接改 daphne
 # 這個 Command class 的 default_port，而不是去改 Django 內建那個。
 from daphne.management.commands.runserver import Command as _DaphneRunserverCommand
 
 _DaphneRunserverCommand.default_port = os.getenv("DJANGO_RUNSERVER_DEFAULT_PORT", "8003")
 
+# 單一 process（單一容器/replica）時 InMemoryChannelLayer 就夠用，同一 process
+# 內可以同時撐住很多個 WebSocket 連線。只有當要跑「多個」process/replica 分攤流
+# 量或做高可用時，才需要讓 channel layer 跨 process 共享狀態——設定 REDIS_URL
+# 就會自動切換成 channels_redis，不設就維持原本的單機行為。
+REDIS_URL = os.getenv("REDIS_URL", "")
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
+    "default": (
+        {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+        if REDIS_URL
+        else {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+    ),
 }
 
 # 多用戶同時寫入時，SQLite 預設的 rollback journal 模式一次只能有一個讀者或寫者持
@@ -168,6 +178,21 @@ CORS_ALLOWED_ORIGINS = [
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
     if origin.strip()
 ]
+
+# nginx（或任何反向代理）終止 TLS 後，是用這個 header 告訴 Django 原始請求其實是
+# https，不然 Django 會以為所有請求都是 http，連帶 SECURE_SSL_REDIRECT 和
+# request.is_secure() 都會誤判。
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if not DEBUG:
+    # http→https 的重新導向交給前面的 nginx 做就好，這裡預設關閉避免重複導向；
+    # 如果反向代理不是本專案的 nginx、沒做這件事，再用環境變數打開。
+    SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "False") == "True"
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
