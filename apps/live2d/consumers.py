@@ -22,7 +22,7 @@ from loguru import logger
 from .engine.agent.output_types import Actions, DisplayText
 from .engine.character import build_config
 from .engine.chat_history import create_new_history, delete_history, get_history, get_history_list, store_message
-from .engine.conversation import TTSTaskManager, finalize_conversation_turn, send_conversation_start_signals
+from .engine.conversation import cleanup_conversation, TTSTaskManager, finalize_conversation_turn, send_conversation_start_signals
 from .engine.conversation_handler import handle_conversation_trigger, handle_individual_interrupt
 from .engine.message_handler import message_handler
 from .engine.paths import BACKGROUNDS_DIR
@@ -211,23 +211,26 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
             )
 
         tts_manager = TTSTaskManager()
-        await send_conversation_start_signals(self._send_text)
+        try:
+            await send_conversation_start_signals(self._send_text)
 
-        sentences, remaining = segment_text_by_pysbd(text)
-        if remaining:
-            sentences.append(remaining)
+            sentences, remaining = segment_text_by_pysbd(text)
+            if remaining:
+                sentences.append(remaining)
 
-        for sentence in sentences:
-            await tts_manager.speak(
-                tts_text=sentence,
-                display_text=DisplayText(text=sentence, name=character_name, avatar=avatar),
-                actions=Actions(),
-                live2d_model=self.context.live2d_model,
-                tts_engine=self.context.tts_engine,
-                websocket_send=self._send_text,
-            )
+            for sentence in sentences:
+                await tts_manager.speak(
+                    tts_text=sentence,
+                    display_text=DisplayText(text=sentence, name=character_name, avatar=avatar),
+                    actions=Actions(),
+                    live2d_model=self.context.live2d_model,
+                    tts_engine=self.context.tts_engine,
+                    websocket_send=self._send_text,
+                )
 
-        await finalize_conversation_turn(tts_manager, self._send_text, self.client_uid)
+            await finalize_conversation_turn(tts_manager, self._send_text, self.client_uid)
+        finally:
+            await cleanup_conversation(tts_manager, "fortune-reading")
 
     async def _handle_fetch_history(self, content: dict) -> None:
         history_uid = content.get("history_uid")

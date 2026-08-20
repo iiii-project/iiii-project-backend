@@ -117,8 +117,8 @@ async def finalize_conversation_turn(tts_manager: "TTSTaskManager", websocket_se
     await send_conversation_end_signal(websocket_send)
 
 
-def cleanup_conversation(tts_manager: "TTSTaskManager", session_emoji: str) -> None:
-    tts_manager.clear()
+async def cleanup_conversation(tts_manager: "TTSTaskManager", session_emoji: str) -> None:
+    await tts_manager.aclose()
     logger.debug(f"Clearing up conversation {session_emoji}.")
 
 
@@ -202,10 +202,21 @@ class TTSTaskManager:
             if audio_file_path:
                 tts_engine.remove_file(audio_file_path)
 
-    def clear(self) -> None:
+    async def aclose(self) -> None:
+        """取消並確實等待 `_sender_task` 結束（它是 `while True` 迴圈，不會自己跑完）。
+
+        只呼叫 `.cancel()` 不 await 的話，事件迴圈可能還沒機會真的處理取消，
+        Task 物件就被 GC 回收，會噴 `Task was destroyed but it is pending!`；
+        `_handle_speak_text`（直接唸解籤結果那條路）先前完全沒清這個 task，
+        每次唸完解籤就永久留一個閒置的背景 task。
+        """
         self.task_list.clear()
-        if self._sender_task:
+        if self._sender_task and not self._sender_task.done():
             self._sender_task.cancel()
+            try:
+                await self._sender_task
+            except asyncio.CancelledError:
+                pass
         self._sequence_counter = 0
         self._next_sequence_to_send = 0
         self._payload_queue = asyncio.Queue()
@@ -293,4 +304,4 @@ async def process_single_conversation(
         await websocket_send(json.dumps({"type": "error", "message": f"Conversation error: {str(e)}"}))
         raise
     finally:
-        cleanup_conversation(tts_manager, session_emoji)
+        await cleanup_conversation(tts_manager, session_emoji)
