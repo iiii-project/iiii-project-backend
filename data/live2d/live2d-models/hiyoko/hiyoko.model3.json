@@ -1,0 +1,50 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "hiyoko.moc3",
+		"Textures": [
+			"hiyoko.2048/texture_00.png"
+		],
+		"Physics": "hiyoko.physics3.json",
+		"DisplayInfo": "hiyoko.cdi3.json",
+		"Expressions": [
+			{
+				"Name": "neutral",
+				"File": "neutral.exp3.json"
+			},
+			{
+				"Name": "うるうる",
+				"File": "uruuru.exp3.json"
+			},
+			{
+				"Name": "手ふり",
+				"File": "tefuri.exp3.json"
+			},
+			{
+				"Name": "おすわり",
+				"File": "osuwari.exp3.json"
+			},
+			{
+				"Name": "よだれ",
+				"File": "yodare.exp3.json"
+			},
+			{
+				"Name": "ゲーム",
+				"File": "game.exp3.json"
+			}
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	],
+	"HitAreas": []
+}

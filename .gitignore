@@ -5,7 +5,15 @@ __pycache__/
 *.pyc
 data/*.sqlite3
 data/*.sqlite3-*
-data/live2d/
+# Live2D 角色的模型/大頭貼/背景是渲染必需的靜態資源(小,~23MB),進版控讓
+# git clone/docker build 就直接帶著跑,不用每次部署手動搬。cache/chat_history
+# 是執行期產生的,models/ 是可選的本機 ASR 模型(1GB+,預設用外部 API 不會用到),
+# 這三個維持排除。
+data/live2d/*
+!data/live2d/model_dict.json
+!data/live2d/live2d-models/
+!data/live2d/avatars/
+!data/live2d/backgrounds/
 logs/*.log
 static/
 media/

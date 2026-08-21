@@ -1,0 +1,162 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "",
+			"Name": "角度 X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "",
+			"Name": "角度 Y"
+		},
+		{
+			"Id": "ParamAngleZ",
+			"GroupId": "",
+			"Name": "角度 Z"
+		},
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "",
+			"Name": "左目　開閉"
+		},
+		{
+			"Id": "ParamEyeROpen",
+			"GroupId": "",
+			"Name": "右目　開閉"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "",
+			"Name": "右目　笑顔"
+		},
+		{
+			"Id": "ParamEyeBallX",
+			"GroupId": "",
+			"Name": "目玉 X"
+		},
+		{
+			"Id": "ParamEyeBallY",
+			"GroupId": "",
+			"Name": "目玉 Y"
+		},
+		{
+			"Id": "ParamMouthForm",
+			"GroupId": "",
+			"Name": "口　変形"
+		},
+		{
+			"Id": "ParamMouthOpenY",
+			"GroupId": "",
+			"Name": "口　開閉"
+		},
+		{
+			"Id": "ParamBreath",
+			"GroupId": "",
+			"Name": "呼吸"
+		},
+		{
+			"Id": "ParamHairFront",
+			"GroupId": "",
+			"Name": "よだれ揺れ"
+		},
+		{
+			"Id": "ParamHairSide",
+			"GroupId": "",
+			"Name": "顔揺れ"
+		},
+		{
+			"Id": "ParamHairBack",
+			"GroupId": "",
+			"Name": "体揺れ"
+		},
+		{
+			"Id": "gameParam",
+			"GroupId": "",
+			"Name": "コントローラー"
+		},
+		{
+			"Id": "headphoneParam",
+			"GroupId": "",
+			"Name": "ヘッドホン"
+		},
+		{
+			"Id": "yodareParam",
+			"GroupId": "",
+			"Name": "よだれ"
+		},
+		{
+			"Id": "osuwariParam",
+			"GroupId": "",
+			"Name": "お座り"
+		},
+		{
+			"Id": "tefuriParam",
+			"GroupId": "",
+			"Name": "手ふり"
+		},
+		{
+			"Id": "pienParam",
+			"GroupId": "",
+			"Name": "うるうる"
+		}
+	],
+	"ParameterGroups": [],
+	"Parts": [
+		{
+			"Id": "Part",
+			"Name": "コントローラー"
+		},
+		{
+			"Id": "Part2",
+			"Name": "手ふり"
+		},
+		{
+			"Id": "Part3",
+			"Name": "ヘッドホン"
+		},
+		{
+			"Id": "Part4",
+			"Name": "よだれ"
+		},
+		{
+			"Id": "Part5",
+			"Name": "うるうる目"
+		},
+		{
+			"Id": "Part6",
+			"Name": "目"
+		},
+		{
+			"Id": "Part7",
+			"Name": "口"
+		},
+		{
+			"Id": "Part8",
+			"Name": "頭"
+		},
+		{
+			"Id": "Part9",
+			"Name": "体"
+		},
+		{
+			"Id": "Part10",
+			"Name": "足"
+		}
+	],
+	"CombinedParameters": [
+		[
+			"ParamAngleX",
+			"ParamAngleY"
+		],
+		[
+			"ParamEyeBallX",
+			"ParamEyeBallY"
+		],
+		[
+			"ParamMouthForm",
+			"ParamMouthOpenY"
+		]
+	]
+}

@@ -6,7 +6,11 @@
 __pycache__
 **/__pycache__
 *.pyc
-data
+data/*.sqlite3
+data/*.sqlite3-*
+data/live2d/models
+data/live2d/cache
+data/live2d/chat_history
 media
 static
 logs
