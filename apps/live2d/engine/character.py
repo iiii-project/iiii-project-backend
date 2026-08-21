@@ -79,6 +79,10 @@ def build_config() -> Config:
                 num_threads=4,
                 use_itn=True,
                 provider="cpu",
+                # SenseVoice 輸出的中文預設是簡體,這裡開 OpenCC s2twp(簡轉台灣繁體
+                # 慣用詞)轉換——這套 ASR 同時給 Live2D 角色語音輸入跟
+                # apps.speech 的 /transcribe 端點共用,兩邊都受益。
+                convert_to_traditional_chinese=True,
             ),
         ),
         tts_config=TTSConfig(
