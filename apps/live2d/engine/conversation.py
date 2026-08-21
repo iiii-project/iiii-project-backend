@@ -44,8 +44,16 @@ def create_batch_input(input_text: str, from_name: str, metadata: Optional[Dict[
     )
 
 
-async def process_user_input(user_input: Union[str, np.ndarray], asr_engine: ASRInterface, websocket_send: WebSocketSend) -> str:
+async def process_user_input(user_input: Union[str, np.ndarray], asr_engine: Optional[ASRInterface], websocket_send: WebSocketSend) -> str:
     if isinstance(user_input, np.ndarray):
+        if asr_engine is None:
+            # ASR 模型缺失/載入失敗時 service_context.init_asr 會把這個設成 None
+            # (優雅降級,見該檔案),這裡要接住,不然語音輸入會讓整個對話任務炸掉。
+            await websocket_send(json.dumps({
+                "type": "error",
+                "message": "語音辨識目前無法使用,請改用文字輸入。",
+            }))
+            return ""
         logger.info("Transcribing audio input...")
         input_text = await asr_engine.async_transcribe_np(user_input)
         await websocket_send(json.dumps({"type": "user-input-transcription", "text": input_text}))

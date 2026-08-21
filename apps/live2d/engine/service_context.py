@@ -118,11 +118,17 @@ class ServiceContext:
     def init_asr(self, asr_config: ASRConfig) -> None:
         if not self.asr_engine or self.character_config.asr_config != asr_config:
             logger.info(f"Initializing ASR: {asr_config.asr_model}")
-            self.asr_engine = ASRFactory.get_asr_system(
-                asr_config.asr_model,
-                **getattr(asr_config, asr_config.asr_model).model_dump(),
-            )
-            self.character_config.asr_config = asr_config
+            try:
+                self.asr_engine = ASRFactory.get_asr_system(
+                    asr_config.asr_model,
+                    **getattr(asr_config, asr_config.asr_model).model_dump(),
+                )
+                self.character_config.asr_config = asr_config
+            except Exception as e:
+                # 跟 init_live2d 一樣優雅降級:語音模型缺失/載入失敗時只關掉語音
+                # 輸入,不能讓整條 WebSocket 連線炸掉、連累角色渲染跟文字聊天。
+                logger.critical(f"Error initializing ASR: {e}")
+                self.asr_engine = None
 
     def init_tts(self, tts_config: TTSConfig) -> None:
         if not self.tts_engine or self.character_config.tts_config != tts_config:
