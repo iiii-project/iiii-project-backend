@@ -30,6 +30,17 @@ def test_fortune_detail_hides_inactive_fortune():
 
 
 @pytest.mark.django_db
+def test_fortune_detail_does_not_expose_fortune_level():
+    fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
+    Fortune.objects.create(fortune_set=fortune_set, number=1, poem="測試籤詩")
+
+    response = APIClient().get(f"/api/v1/fortune-sets/{fortune_set.code}/fortunes/1/")
+
+    assert response.status_code == 200
+    assert "fortune_level" not in response.data["data"]
+
+
+@pytest.mark.django_db
 def test_bulk_import_rejects_whole_batch_when_one_item_is_invalid():
     fortune_set = FortuneSet.objects.get(code="SIXTY_JIAZI")
     admin = User.objects.create_superuser("admin2", "admin2@example.com", "pass")

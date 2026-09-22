@@ -12,6 +12,6 @@ class FortuneSetAdmin(admin.ModelAdmin):
 
 @admin.register(Fortune)
 class FortuneAdmin(admin.ModelAdmin):
-    list_display = ("fortune_set", "number", "title", "fortune_level", "is_active", "updated_at")
-    list_filter = ("fortune_set", "fortune_level", "is_active")
+    list_display = ("fortune_set", "number", "title", "is_active", "updated_at")
+    list_filter = ("fortune_set", "is_active")
     search_fields = ("title", "poem", "translation", "story")

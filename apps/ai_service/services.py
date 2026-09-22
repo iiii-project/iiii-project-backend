@@ -65,7 +65,6 @@ def _interpret_user_prompt(session: DivinationSession) -> str:
 籤號：{fortune.number}
 籤名：{fortune.title}
 天干地支：{fortune.ganzhi}
-吉凶分類：{fortune.fortune_level}
 籤詩原文：{fortune.poem}
 白話翻譯：{fortune.translation}
 籤詩典故：{fortune.story}

@@ -29,7 +29,6 @@ def seed_sixty_jiazi_fortunes(apps, schema_editor):
             defaults={
                 "title": entry["title"],
                 "ganzhi": entry["ganzhi"],
-                "fortune_level": entry["fortune_level"],
                 "poem": entry["poem"],
                 "translation": entry["translation"],
                 "story": entry["story"],

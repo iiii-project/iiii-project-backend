@@ -36,7 +36,6 @@ class Command(BaseCommand):
                 defaults={
                     "title": entry["title"],
                     "ganzhi": entry["ganzhi"],
-                    "fortune_level": entry["fortune_level"],
                     "poem": entry["poem"],
                     "translation": entry["translation"],
                     "story": entry["story"],

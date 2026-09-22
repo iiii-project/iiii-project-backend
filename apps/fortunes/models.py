@@ -28,7 +28,6 @@ class Fortune(models.Model):
     number = models.PositiveIntegerField()
     title = models.CharField(max_length=100, blank=True)
     ganzhi = models.CharField(max_length=20, blank=True)
-    fortune_level = models.CharField(max_length=30, blank=True)
     poem = models.TextField()
     translation = models.TextField(blank=True)
     story = models.TextField(blank=True)
