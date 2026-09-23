@@ -15,10 +15,9 @@ from config.exceptions import DomainError
 
 from .models import AIMessage
 
-try:
-    import opik
-except ImportError:  # pragma: no cover - optional observability dependency
-    opik = None
+# Keep this name available for tests/integrations that inject an observer, but
+# do not import the relatively heavy optional package unless it is enabled.
+opik = None
 
 
 def _message_data(message: AIMessage) -> dict:
@@ -142,11 +141,17 @@ def _chat(messages: list[dict[str, str]]) -> str:
 
 @contextmanager
 def _llm_span(messages: list[dict[str, str]]):
-    if opik is None or not settings.OPIK_ENABLED:
+    global opik
+    # Keep the optional observability package out of the normal request path.
+    # This matters on the constrained deployment where OPIK is disabled.
+    if not settings.OPIK_ENABLED:
         yield None
         return
 
     try:
+        if opik is None:
+            import opik as opik_module
+            opik = opik_module
         span_context = opik.start_as_current_span(
             "fortune-llm-chat",
             type="llm",

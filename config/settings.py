@@ -210,5 +210,5 @@ LLM_MODEL = os.getenv("LLM_MODEL", "local-model")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
 # 抽籤完成就在背景先跑解籤，讓使用者擲筊、看過場的時間拿來等 LLM（見 ai_service.services）
 INTERPRET_PREWARM_ENABLED = os.getenv("INTERPRET_PREWARM_ENABLED", "True") == "True"
-OPIK_ENABLED = os.getenv("OPIK_ENABLED", "True") == "True"
+OPIK_ENABLED = os.getenv("OPIK_ENABLED", "False") == "True"
 OPIK_PROJECT_NAME = os.getenv("OPIK_PROJECT_NAME", "ai-fortune")
