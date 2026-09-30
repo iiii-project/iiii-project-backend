@@ -130,6 +130,23 @@ uv run python -m pytest --cov=apps --cov=config --cov-report=term-missing
 
 CI（`.github/workflows/ci.yml`）在每次 push/PR 到 `main` 時執行同一套測試＋覆蓋率，外加 `makemigrations --check --dry-run` 守門，確保沒有忘記產生 migration。
 
+## Docker Compose
+
+後端是獨立的 compose 專案，前端（nginx + caddy）在 `../iiii-project-frontend` 另外啟動。兩邊透過共用的 docker network `iiii-project` 互通，backend 服務在這個網路上的別名是 `backend`，前端 nginx 以 `backend:8000` 連進來。
+
+- `compose.yaml`（本機開發）：backend + llama.cpp。`llamacpp/` 目錄沒有隨 git 流通，需要自己準備，並把至少一個 `.gguf` 模型放進 `llamacpp/model/`。`LLAMA_MODEL`、`LLAMA_MODEL_ALIAS`、`DJANGO_SUPERUSER_*` 從本目錄的 `.env` 讀取。
+- `compose.prod.yaml`（正式環境）：只有 backend，不對外開埠，LLM 走 `.env` 設定的外部 API。
+
+```bash
+docker network create iiii-project      # 第一次才需要
+docker compose up -d --build            # 本機開發
+docker compose -f compose.prod.yaml up -d --build   # 正式環境
+```
+
+資料庫與上傳檔案放在 `iiii-project-frontend_sqlite_data`、`iiii-project-frontend_media_data` 兩個 volume。名稱沿用拆分前（前後端合併在前端 compose 時）的舊名，升級後資料不會遺失。
+
+VM 上可以直接執行 `scripts/deploy.sh`：拉最新的 main、必要時建立共用網路，再重建後端容器。GitHub Actions 的 deploy job 就是透過 SSH 執行它。
+
 ## API 文件
 
 - [docs/API.md](docs/API.md)：完整 REST API 規格（端點、認證、請求/回應範例）。
