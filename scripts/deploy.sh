@@ -12,16 +12,15 @@ set -euo pipefail
 # 整段包在 main() 裡、最後一行才呼叫：下面的 git pull 可能會更新這支腳本本身，
 # bash 是邊讀邊執行的，先整份讀進來才不會跑到一半讀到新版內容。
 main() {
-  local repo name compose_file lock_file
+  local repo name lock_file
   repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   name="$(basename "$repo")"
-  compose_file="${COMPOSE_FILE_NAME:-compose.prod.yaml}"
   lock_file="${DEPLOY_LOCK_FILE:-/tmp/${name}-deploy.lock}"
 
   log() { printf '[deploy %s %s] %s\n' "$name" "$(date '+%F %T')" "$*"; }
 
   [[ -d "$repo/.git" ]] || { log "不是 git repo：$repo"; exit 1; }
-  [[ -f "$repo/$compose_file" ]] || { log "找不到 $repo/$compose_file"; exit 1; }
+  [[ -f "$repo/compose.yaml" ]] || { log "找不到 $repo/compose.yaml"; exit 1; }
   [[ -f "$repo/.env" ]] || { log "缺少 $repo/.env"; exit 1; }
 
   # 同一個 repo 手動部署與自動部署撞在一起時排隊，最多等 20 分鐘。
@@ -46,12 +45,12 @@ main() {
   log "重新建置並啟動容器"
   # --remove-orphans：拆分前前端 compose 專案裡的 backend 容器，拆分後會變成孤兒；
   # 不移除的話它會跟新的後端同時掛著同一個 SQLite volume。
-  docker compose -f "$compose_file" up -d --build --force-recreate --remove-orphans
+  docker compose up -d --build --force-recreate --remove-orphans
 
   # 每次 --build 都會留下舊的 dangling image，不清的話 VM 磁碟會慢慢被吃光。
   docker image prune -f >/dev/null
 
-  docker compose -f "$compose_file" ps
+  docker compose ps
   log "完成"
 }
 

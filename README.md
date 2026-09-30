@@ -54,7 +54,6 @@ curl http://127.0.0.1:8000/api/v1/health/
 | `INTERPRET_PREWARM_WORKERS` | 上面那個背景預熱用的執行緒池大小。 | `2` |
 | `OPIK_ENABLED` | 是否啟用 [Opik](https://www.comet.com/site/products/opik/)（LLM 呼叫可觀測性追蹤）。沒有 Opik 帳號就留 `False`，程式會整段跳過。 | `.env.example` 建議 `False` |
 | `OPIK_URL_OVERRIDE` / `OPIK_PROJECT_NAME` / `OPIK_WORKSPACE` | 只有 `OPIK_ENABLED=True` 才需要填。這三個是 `opik` 這個 pip 套件自己讀取的環境變數，不是本專案程式碼讀的。 | 可留空/預設值 |
-| `LLAMA_MODEL` / `LLAMA_MODEL_ALIAS` | 只有用 [Docker Compose](#docker-compose) 一起啟動 llama.cpp 時才需要，純本機 `runserver` 開發可忽略。 | 見下方 Docker 章節 |
 
 ## Live2D 資源檔案（新環境最容易卡住的地方）
 
@@ -132,18 +131,14 @@ CI（`.github/workflows/ci.yml`）在每次 push/PR 到 `main` 時執行同一�
 
 ## Docker Compose
 
-後端是獨立的 compose 專案，前端（nginx + caddy）在 `../iiii-project-frontend` 另外啟動。兩邊透過共用的 docker network `iiii-project` 互通，backend 服務在這個網路上的別名是 `backend`，前端 nginx 以 `backend:8000` 連進來。
-
-- `compose.yaml`（本機開發）：backend + llama.cpp。`llamacpp/` 目錄沒有隨 git 流通，需要自己準備，並把至少一個 `.gguf` 模型放進 `llamacpp/model/`。`LLAMA_MODEL`、`LLAMA_MODEL_ALIAS`、`DJANGO_SUPERUSER_*` 從本目錄的 `.env` 讀取。
-- `compose.prod.yaml`（正式環境）：只有 backend，不對外開埠，LLM 走 `.env` 設定的外部 API。
+後端是獨立的 compose 專案（`compose.yaml`，只有 backend），前端（nginx + caddy）在 `../iiii-project-frontend` 另外啟動。兩邊透過共用的 docker network `iiii-project` 互通，backend 服務在這個網路上的別名是 `backend`，前端 nginx 以 `backend:8000` 連進來；後端本身不對外開埠。LLM 走 `.env` 設定的外部 API。
 
 ```bash
 docker network create iiii-project      # 第一次才需要
-docker compose up -d --build            # 本機開發
-docker compose -f compose.prod.yaml up -d --build   # 正式環境
+docker compose up -d --build
 ```
 
-資料庫與上傳檔案放在 `iiii-project-frontend_sqlite_data`、`iiii-project-frontend_media_data` 兩個 volume。名稱沿用拆分前（前後端合併在前端 compose 時）的舊名，升級後資料不會遺失。
+資料庫與上傳檔案放在 `iiii-project-frontend_sqlite_data`、`iiii-project-frontend_media_data` 兩個 volume（沿用拆分前的名稱，VM 上既有資料會繼續使用）。
 
 VM 上可以直接執行 `scripts/deploy.sh`：拉最新的 main、必要時建立共用網路，再重建後端容器。GitHub Actions 的 deploy job 就是透過 SSH 執行它。
 
