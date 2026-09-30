@@ -26,6 +26,13 @@ from .engine.conversation import cleanup_conversation, TTSTaskManager, finalize_
 from .engine.conversation_handler import handle_conversation_trigger, handle_individual_interrupt
 from .engine.message_handler import message_handler
 from .engine.paths import BACKGROUNDS_DIR
+from .engine.prompt_safety import (
+    MAX_HEARD_RESPONSE_CHARS,
+    MAX_SESSION_CONTEXT_CHARS,
+    MAX_SPEAK_TEXT_CHARS,
+    MAX_USER_INPUT_CHARS,
+    sanitize_untrusted_text,
+)
 from .engine.service_context import ServiceContext
 from .engine.utils.sentence_divider import segment_text_by_pysbd
 
@@ -54,6 +61,9 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
         self.received_audio_buffer = {self.client_uid: np.array([], dtype=np.float32)}
         self.current_conversation_tasks = {}
         self.context: ServiceContext | None = None
+        # 聊天紀錄檔是所有連線共用同一個 conf_uid 目錄；只允許存取這條連線自己建立的，
+        # 不然任何人都能列出、讀取或刪除別人的對話。
+        self.owned_history_uids: set[str] = set()
 
         try:
             default_context = await _get_default_context()
@@ -111,6 +121,10 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
         msg_type = content.get("type")
         try:
             if msg_type in ("text-input", "mic-audio-end"):
+                if msg_type == "text-input":
+                    content = {**content, "text": sanitize_untrusted_text(content.get("text"), MAX_USER_INPUT_CHARS)}
+                    if not content["text"]:
+                        return
                 await handle_conversation_trigger(
                     msg_type=msg_type,
                     data=content,
@@ -132,25 +146,26 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
                 # 會等待 client 回傳 frontend-playback-complete，若直接 await 在這裡會卡死整個
                 # receive_json 迴圈，導致那則回傳訊息永遠等不到被處理的機會（實測踩過一次）。
                 self.current_conversation_tasks[self.client_uid] = asyncio.create_task(
-                    self._handle_speak_text(content.get("text", ""))
+                    self._handle_speak_text(sanitize_untrusted_text(content.get("text"), MAX_SPEAK_TEXT_CHARS))
                 )
             elif msg_type == "remember-context":
-                # 靜默寫入記憶：不經 TTS、不進聊天記錄，純粹讓角色「知道」某件事
-                # （目前用在小夥伴開場白只講招呼語，但仍需要知道解籤全文以便答追問）。
-                # silent=True：這段內容從沒被講出來過，之後若使用者打斷角色說話，
-                # handle_interrupt() 不能把這筆記憶誤當成「被打斷的發言」蓋掉。
-                # 純同步操作、沒有任何 await 會卡住，不需要像 speak-text 那樣包成背景 task。
+                # 本次求籤資料（使用者的問題＋解籤結果）：不經 TTS、不進聊天記錄。
+                # 內容含使用者自己輸入的問題，屬於不可信資料——不寫成 assistant 記憶，
+                # 而是清理後放進 system prompt 的資料區塊（見 prompt_safety.py）。
                 if self.context and self.context.agent_engine:
-                    self.context.agent_engine.remember(content.get("text", ""), role="assistant", silent=True)
+                    self.context.agent_engine.set_session_context(
+                        sanitize_untrusted_text(content.get("text"), MAX_SESSION_CONTEXT_CHARS)
+                    )
             elif msg_type == "interrupt-signal":
                 await handle_individual_interrupt(
                     client_uid=self.client_uid,
                     current_conversation_tasks=self.current_conversation_tasks,
                     context=self.context,
-                    heard_response=content.get("text", ""),
+                    heard_response=sanitize_untrusted_text(content.get("text"), MAX_HEARD_RESPONSE_CHARS),
                 )
             elif msg_type == "fetch-history-list":
                 histories = await asyncio.to_thread(get_history_list, self.context.character_config.conf_uid)
+                histories = [h for h in histories if h.get("uid") in self.owned_history_uids]
                 await self._send_text(json.dumps({"type": "history-list", "histories": histories}))
             elif msg_type == "fetch-and-set-history":
                 await self._handle_fetch_history(content)
@@ -234,7 +249,7 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_fetch_history(self, content: dict) -> None:
         history_uid = content.get("history_uid")
-        if not history_uid:
+        if not history_uid or history_uid not in self.owned_history_uids:
             return
         self.context.history_uid = history_uid
         await asyncio.to_thread(
@@ -249,7 +264,10 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_create_history(self) -> None:
         history_uid = await asyncio.to_thread(create_new_history, self.context.character_config.conf_uid)
         if history_uid:
+            self.owned_history_uids.add(history_uid)
             self.context.history_uid = history_uid
+            # 新對話＝新的一場：上一場的求籤資料也一起清掉
+            self.context.agent_engine.clear_session_context()
             await asyncio.to_thread(
                 self.context.agent_engine.set_memory_from_history,
                 self.context.character_config.conf_uid,
@@ -259,8 +277,9 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_delete_history(self, content: dict) -> None:
         history_uid = content.get("history_uid")
-        if not history_uid:
+        if not history_uid or history_uid not in self.owned_history_uids:
             return
+        self.owned_history_uids.discard(history_uid)
         success = await asyncio.to_thread(delete_history, self.context.character_config.conf_uid, history_uid)
         await self._send_text(json.dumps({"type": "history-deleted", "success": success, "history_uid": history_uid}))
         if history_uid == self.context.history_uid:

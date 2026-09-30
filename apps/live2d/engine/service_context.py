@@ -21,6 +21,7 @@ from .asr.asr_factory import ASRFactory
 from .asr.asr_interface import ASRInterface
 from .config_manager import AgentConfig, ASRConfig, CharacterConfig, Config, SystemConfig, TTSConfig
 from .live2d_model import Live2dModel
+from .prompt_safety import SECURITY_RULES
 from .tts.tts_factory import TTSFactory
 from .tts.tts_interface import TTSInterface
 
@@ -161,6 +162,7 @@ class ServiceContext:
             "資訊不足時請明確說明不確定性，不要捏造；"
             "避免無意義的連續重複，並依目前設定的回覆長度上限保持精簡。\n"
         )
+        persona_prompt += SECURITY_RULES
         persona_prompt += _LIVE2D_EXPRESSION_PROMPT_TEMPLATE.replace(
             "[<insert_emomap_keys>]", self.live2d_model.emo_str
         )
