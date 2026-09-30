@@ -210,5 +210,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "local-model")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
 # 抽籤完成就在背景先跑解籤，讓使用者擲筊、看過場的時間拿來等 LLM（見 ai_service.services）
 INTERPRET_PREWARM_ENABLED = os.getenv("INTERPRET_PREWARM_ENABLED", "True") == "True"
+# Live2D 角色的聊天紀錄保留天數；超過就刪除（0 或負數＝不清理）。
+LIVE2D_CHAT_HISTORY_RETENTION_DAYS = int(os.getenv("LIVE2D_CHAT_HISTORY_RETENTION_DAYS", "30"))
 OPIK_ENABLED = os.getenv("OPIK_ENABLED", "False") == "True"
 OPIK_PROJECT_NAME = os.getenv("OPIK_PROJECT_NAME", "ai-fortune")

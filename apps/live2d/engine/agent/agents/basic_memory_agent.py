@@ -65,7 +65,8 @@ class BasicMemoryAgent(AgentInterface):
         self.chat = self._chat_function_factory()
 
     def set_system(self, system: str):
-        logger.debug(f"Memory Agent: Setting system prompt: '''{system}'''")
+        # 不印全文：每條連線都會印一次，整份 prompt 塞滿 log 又沒有排查價值
+        logger.debug(f"Memory Agent: system prompt set ({len(system)} chars)")
         if self.interrupt_method == "user":
             system = f"{system}\n\nIf you received `[interrupted by user]` signal, you were interrupted."
         self._system = system

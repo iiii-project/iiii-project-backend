@@ -166,7 +166,7 @@ class ServiceContext:
         persona_prompt += _LIVE2D_EXPRESSION_PROMPT_TEMPLATE.replace(
             "[<insert_emomap_keys>]", self.live2d_model.emo_str
         )
-        logger.debug(f"System prompt: {persona_prompt}")
+        logger.debug(f"System prompt built ({len(persona_prompt)} chars)")
         return persona_prompt
 
     def update_max_response_characters(self, value: int) -> None:

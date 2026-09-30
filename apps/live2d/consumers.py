@@ -13,15 +13,24 @@ after that.
 
 import asyncio
 import json
+import time
 import uuid
 
 import numpy as np
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
 from loguru import logger
 
 from .engine.agent.output_types import Actions, DisplayText
 from .engine.character import build_config
-from .engine.chat_history import create_new_history, delete_history, get_history, get_history_list, store_message
+from .engine.chat_history import (
+    create_new_history,
+    delete_history,
+    get_history,
+    get_history_list,
+    prune_histories,
+    store_message,
+)
 from .engine.conversation import cleanup_conversation, TTSTaskManager, finalize_conversation_turn, send_conversation_start_signals
 from .engine.conversation_handler import handle_conversation_trigger, handle_individual_interrupt
 from .engine.message_handler import message_handler
@@ -38,6 +47,33 @@ from .engine.utils.sentence_divider import segment_text_by_pysbd
 
 _default_context: ServiceContext | None = None
 _default_context_lock = asyncio.Lock()
+
+# 過期聊天紀錄的清理：搭在「有人連線」這個時機順便做，但最多一小時一次，
+# 不必另外跑排程，也不會每條連線都掃一次目錄。
+_PRUNE_INTERVAL_SECONDS = 60 * 60
+_last_prune_at = 0.0
+
+
+def _schedule_history_prune(conf_uid: str) -> None:
+    global _last_prune_at
+    now = time.monotonic()
+    if _last_prune_at and now - _last_prune_at < _PRUNE_INTERVAL_SECONDS:
+        return
+    _last_prune_at = now
+    retention_days = getattr(settings, "LIVE2D_CHAT_HISTORY_RETENTION_DAYS", 30)
+    task = asyncio.create_task(asyncio.to_thread(prune_histories, conf_uid, retention_days))
+    # 保留 task 參照，避免背景 task 在跑完前被 GC 回收
+    _background_tasks.add(task)
+    task.add_done_callback(_on_prune_done)
+
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _on_prune_done(task: asyncio.Task) -> None:
+    _background_tasks.discard(task)
+    if not task.cancelled() and task.exception():
+        logger.error(f"History prune failed: {task.exception()}")
 
 
 async def _get_default_context() -> ServiceContext:
@@ -85,6 +121,7 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
             await self._send_set_model_and_conf()
 
             logger.info(f"Connection established for client {self.client_uid}")
+            _schedule_history_prune(self.context.character_config.conf_uid)
         except Exception as e:
             logger.error(f"Failed to initialize connection for client {self.client_uid}: {e}")
             await self.close()
@@ -164,8 +201,9 @@ class Live2DConsumer(AsyncJsonWebsocketConsumer):
                     heard_response=sanitize_untrusted_text(content.get("text"), MAX_HEARD_RESPONSE_CHARS),
                 )
             elif msg_type == "fetch-history-list":
-                histories = await asyncio.to_thread(get_history_list, self.context.character_config.conf_uid)
-                histories = [h for h in histories if h.get("uid") in self.owned_history_uids]
+                histories = await asyncio.to_thread(
+                    get_history_list, self.context.character_config.conf_uid, list(self.owned_history_uids)
+                )
                 await self._send_text(json.dumps({"type": "history-list", "histories": histories}))
             elif msg_type == "fetch-and-set-history":
                 await self._handle_fetch_history(content)
