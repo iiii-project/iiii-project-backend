@@ -133,6 +133,11 @@ def actions_extractor(live2d_model: Live2dModel):
                         expressions = live2d_model.extract_emotion(sentence.text)
                         if expressions:
                             actions.expressions = expressions
+                            # 表情標籤（例如 [neutral]）已轉成 actions，不該再出現在字幕／聊天泡泡裡
+                            sentence = SentenceWithTags(
+                                text=live2d_model.remove_emotion_keywords(sentence.text).strip(),
+                                tags=sentence.tags,
+                            )
                     yield sentence, actions  # Yield the tuple
                 elif isinstance(item, dict):
                     # Pass through dictionaries
