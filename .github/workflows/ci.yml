@@ -41,7 +41,8 @@ jobs:
   # CD：test 通過、而且是 push 到 main 才部署（PR 不部署）。
   # 在 VM 上執行本 repo 的 scripts/deploy.sh（只更新、重建後端自己的容器）。
   # 在 repo 的 Settings → Secrets and variables → Actions 設定：
-  #   Secrets：VM_HOST、VM_USER、VM_SSH_KEY（私鑰）、VM_PORT（選填，預設 22）
+  #   Secrets：SERVER_HOST（伺服器 IP）、SERVER_USER（登入帳號）、IIISERVERKEY（SSH 私鑰，只放私鑰本身）、
+  #            SERVER_PORT（選填，預設 22）
   #   Variables：DEPLOY_ENABLED=true（設好 secrets 後再打開）、
   #              DEPLOY_ROOT（選填，VM 上放兩個 repo 的資料夾，預設 $HOME/iiii-project）
   deploy:
@@ -58,10 +59,10 @@ jobs:
       - name: Deploy to VM
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: ${{ secrets.VM_PORT || 22 }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.IIISERVERKEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
           command_timeout: 30m
           script: |
             ROOT="${{ vars.DEPLOY_ROOT }}"
